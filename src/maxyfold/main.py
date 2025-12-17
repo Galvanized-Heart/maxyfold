@@ -19,7 +19,7 @@ def cli():
 @click.option('--name', default='User', help='The name to greet.')
 def hello(name):
     """A simple hello command to test the CLI setup."""
-    click.echo(f"Hello, {name}!")
+    click.echo(f"Hello, {name}! Welcome to MaxyFold! :D")
 
 
 # Download structural data from PDB
@@ -28,7 +28,7 @@ def hello(name):
 @click.option("--assemblies", "-a", is_flag=True, help="Download the biological assembly files.")
 @click.option("--ccd", "-c", is_flag=True, help="Download the Chemical Component Dictionary.")
 @click.option("--batch-size", type=int, default=20000, help="Number of biological assembly files to download before tarring/cleaning.")
-def download(ids, assemblies, ccd):
+def download(ids, assemblies, ccd, batch_size):
     """Command for downloading raw PDB ids, ccd, and assemblies to `/data/pdb/raw/`."""
     if not (ids or assemblies or ccd):
         click.echo("No specific components requested. Defaulting to download all.")
@@ -67,6 +67,13 @@ def download(ids, assemblies, ccd):
 
         # Batch process assemblies
         for i in range(num_batches):
+            # Check for existing batches
+            tar_name = f"assemblies_batch_{i}.tar.gz"
+            tar_path = raw_dir_abs / tar_name
+            if tar_path.exists():
+                click.echo(f"Batch {i+1}/{num_batches} already completed ({tar_name} exists). Skipping.")
+                continue
+
             start = i * batch_size
             end = start + batch_size
             batch_ids = all_pdb_ids[start:end]

@@ -11,10 +11,7 @@ import rootutils
 
 class PDBDownloader:
     """
-    A class to handle downloading of data from the RCSB PDB.
-    
-    Encapsulates logic for finding PDB IDs, downloading biological assemblies,
-    and fetching the Chemical Component Dictionary.
+    Finds PDB IDs, downloads biological assemblies, and fetches Chemical Component Dictionary.
     """
     
     SEARCH_REQUEST = {
@@ -24,8 +21,7 @@ class PDBDownloader:
             "nodes": [
                 {"type": "terminal", "service": "text", "parameters": {"attribute": "rcsb_accession_info.initial_release_date", "operator": "less_or_equal", "value": "2021-09-30T23:59:59Z"}},
                 {"type": "terminal", "service": "text", "parameters": {"attribute": "rcsb_entry_info.resolution_combined", "operator": "less_or_equal", "value": 9.0}},
-                # NOTE: Not sure if this filter is necessary
-                #{"type": "terminal","service": "text","parameters": {"attribute": "exptl.method", "operator": "exact_match", "value": "X-RAY DIFFRACTION"}}
+                {"type": "terminal","service": "text","parameters": {"attribute": "exptl.method", "operator": "exact_match", "value": "X-RAY DIFFRACTION"}} # NOTE: Not sure if xray filter is necessary
             ]
         },
         "return_type": "entry",
