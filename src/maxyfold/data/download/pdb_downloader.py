@@ -11,7 +11,8 @@ import rootutils
 
 class PDBDownloader:
     """
-    Finds PDB IDs, downloads biological assemblies, and fetches Chemical Component Dictionary.
+    Handles finding PDB IDs, downloading biological assemblies,
+    and fetching the Chemical Component Dictionary.
     """
     
     SEARCH_REQUEST = {
