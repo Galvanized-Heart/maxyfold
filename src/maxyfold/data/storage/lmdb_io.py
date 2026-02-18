@@ -1,6 +1,6 @@
 import lmdb
-import pickle
-from pathlib import Path
+from safetensors.numpy import save
+import numpy as np
 
 class LMDBWriter:
     def __init__(self, output_path: str, map_size: int = 100 * 1024**3):
@@ -26,7 +26,18 @@ class LMDBWriter:
         if self.db: self.db.close()
 
     def write(self, key: str, data: dict):
-        self.txn.put(key.encode('ascii'), pickle.dumps(data, protocol=-1))
+        tensors = {
+            "coords": data["coords"],
+            "mask": data["mask"].astype(np.uint8) 
+        }
+        metadata = {
+            "chain_id": data["chain_id"],
+            "sequence": data["sequence"]
+        }
+
+        # Serialize to bytes using safetensors
+        data_bytes = save(tensors, metadata=metadata)
+        self.txn.put(key.encode('ascii'), data_bytes)
 
     def commit(self):
         self.txn.commit()
