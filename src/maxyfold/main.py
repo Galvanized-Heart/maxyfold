@@ -10,7 +10,7 @@ import rootutils
 
 import click
 
-from maxyfold.data import PDBDownloader, PDBProcessor, LMDBWriter
+from maxyfold.data import PDBDownloader, PDBProcessor, LMDBWriter, AllAtomProcessor
 
 @click.group()
 def cli():
@@ -122,83 +122,55 @@ def download(ids, assemblies, ccd, batch_size):
 
 @cli.command()
 @click.option("--output-name", default="pdb_dataset.lmdb", help="Name of the output LMDB file.")
-@click.option("--batch-limit", default=0, help="Limit number of tarballs to process (0 = all). Useful for testing.")
-def process(output_name, batch_limit):
-    """Processes raw .tar.gz archives into a clean, ML-ready LMDB dataset."""
-    # Setup paths
+@click.option("--file-limit", default=0, help="Limit exact number of PDB files to process. Great for fast testing!")
+def process(output_name, file_limit):
+    """Processes raw .tar.gz archives into a clean, ML-ready All-Atom LMDB dataset."""
+    from maxyfold.data import AllAtomProcessor, TarballReader
+
     root = rootutils.find_root(indicator=".project-root")
     raw_dir = root / "data/pdb/raw/assemblies"
     processed_dir = root / "data/pdb/processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     output_path = processed_dir / output_name
     
-    # Find input files
     tar_files = sorted(list(raw_dir.glob("assemblies_batch_*.tar.gz")))
     if not tar_files:
         click.echo(click.style("No tarballs found in raw directory!", fg="red"))
         return
 
-    if batch_limit > 0:
-        tar_files = tar_files[:batch_limit]
-        click.echo(f"Testing mode: processing only first {batch_limit} batches.")
+    click.echo("Initializing AllAtomProcessor...")
+    processor = AllAtomProcessor()
 
-    # Initialize processor
-    click.echo("Initializing PDBProcessor (loading OpenMM)...")
-    processor = PDBProcessor()
+    # Initialize our new data stream class
+    cif_stream = TarballReader(tar_paths=tar_files, file_limit=file_limit)
 
-    click.echo(f"Writing dataset to {output_path}...")
+    click.echo(f"Writing ALL-ATOM dataset to {output_path}...")
     
-    # Processing loop
-    total_chains = 0
+    total_complexes = 0
     total_errors = 0
     
+    # Set up progress bar
+    pbar_total = file_limit if file_limit > 0 else None
+    
     with LMDBWriter(output_path) as writer:
-        # Tarballs inside directory
-        for tar_path in tqdm(tar_files, desc="Processing Batches"):
-            try:
-                with tarfile.open(tar_path, "r:gz") as tar:
-                    # Get list of files in this tarball
-                    members = [m for m in tar.getmembers() if m.isfile() and m.name.endswith('.gz')]
-                    
-                    # Files inside tarball
-                    for member in tqdm(members, desc=f"Inside {tar_path.name}", leave=False):
-                        pdb_id = member.name.split("-")[0]
-                        
-                        try:
-                            # Extract bytes
-                            f_obj = tar.extractfile(member)
-                            if f_obj is None: 
-                                continue
-                            file_bytes = f_obj.read()
-
-                            result = processor.parse_cif_content(file_bytes, pdb_id)
-                            
-                            if result:
-                                # Save each chain as a separate training example
-                                for chain in result['chains']:
-                                    key = f"{result['pdb_id']}_{chain['chain_id']}"
-                                    
-                                    # Write dictionary to LMDB
-                                    writer.write(key, chain)
-                                    total_chains += 1
-                                    
-                                    # Commit periodically to keep memory usage stable
-                                    if total_chains % 5000 == 0:
-                                        writer.commit()
-                            else:
-                                total_errors += 1
-                                
-                        except Exception as e:
-                            click.echo(f"Error processing {member.name}: {e}")
-                            total_errors += 1
-                            
-            except Exception as e:
-                click.echo(click.style(f"CRITICAL: Failed to read tarball {tar_path.name}: {e}", fg="red"))
+        # Look how flat and clean this loop is now!
+        for pdb_id, cif_string in tqdm(cif_stream, total=pbar_total, desc="Processing PDBs"):
+            
+            result = processor.parse_cif_string(cif_string, pdb_id)
+            
+            if result:
+                writer.write(pdb_id, result)
+                total_complexes += 1
+                
+                # Commit to disk periodically
+                if total_complexes % 1000 == 0:
+                    writer.commit()
+            else:
+                total_errors += 1
 
     click.echo(click.style(f"\nProcessing Complete!", fg="green", bold=True))
-    click.echo(f"Total Chains Saved: {total_chains}")
-    click.echo(f"Skipped/Errors:     {total_errors}")
-    click.echo(f"Database location:  {output_path}")
+    click.echo(f"Total Complexes Saved: {total_complexes}")
+    click.echo(f"Skipped/Errors:        {total_errors}")
 
 if __name__ == '__main__':
     cli()

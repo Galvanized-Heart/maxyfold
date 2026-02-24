@@ -26,13 +26,17 @@ class LMDBWriter:
         if self.db: self.db.close()
 
     def write(self, key: str, data: dict):
+        # Package numpy arrays
         tensors = {
             "coords": data["coords"],
-            "mask": data["mask"].astype(np.uint8) 
+            "mask": data["mask"].astype(np.uint8),
+            "res_type": data["res_type"],
+            "atom_elements": data["atom_elements"],
+            "chain_ids": data["chain_ids"]
         }
+        # Package strings
         metadata = {
-            "chain_id": data["chain_id"],
-            "sequence": data["sequence"]
+            "pdb_id": data["pdb_id"]
         }
 
         # Serialize to bytes using safetensors

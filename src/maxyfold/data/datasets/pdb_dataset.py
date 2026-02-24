@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 
-from .. import DataBackend
+from maxyfold.data.components.backend import DataBackend
 
 class PDBDataset(Dataset):
     def __init__(self, backend: DataBackend):

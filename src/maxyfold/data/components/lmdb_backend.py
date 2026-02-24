@@ -34,10 +34,14 @@ class LMDBBackend(DataBackend):
         if data_bytes is None:
             return None
 
-        tensors, metadata = load(data_bytes)
+        # Load safetensors directly into a dict
+        data = load(data_bytes)
+        
         return {
-            "coords": tensors["coords"],
-            "mask": tensors["mask"].astype(bool),
-            "chain_id": metadata.get("chain_id", ""),
-            "sequence": metadata.get("sequence", "")
+            "pdb_id": key.decode('ascii'),
+            "coords": data["coords"],
+            "mask": data["mask"].astype(bool),
+            "res_type": data["res_type"],
+            "atom_elements": data["atom_elements"],
+            "chain_ids": data["chain_ids"]
         }

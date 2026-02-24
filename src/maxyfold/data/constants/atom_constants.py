@@ -57,17 +57,18 @@ ATOM_MAPS.update({
 })
 
 # NUCLEIC ACIDS
-na_backbone = ['P', 'OP1', 'OP2', "O5'", "C5'", "C4'", "O4'", "C3'", "O3'", "C2'", "C1'"]
+dna_backbone = ['P', 'OP1', 'OP2', "O5'", "C5'", "C4'", "O4'", "C3'", "O3'", "C2'", "C1'"]
+rna_backbone = dna_backbone + ["O2'"]
 
 ATOM_MAPS.update({
-    'A': na_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'N6', 'N1', 'C2', 'N3', 'C4'],
-    'G': na_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'O6', 'N1', 'C2', 'N2', 'N3', 'C4'],
-    'C': na_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'N4', 'C5', 'C6'],
-    'U': na_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'O4', 'C5', 'C6'],
-    'DA': na_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'N6', 'N1', 'C2', 'N3', 'C4'],
-    'DG': na_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'O6', 'N1', 'C2', 'N2', 'N3', 'C4'],
-    'DC': na_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'N4', 'C5', 'C6'],
-    'DT': na_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'O4', 'C5', 'C7', 'C6'],
+    'A': rna_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'N6', 'N1', 'C2', 'N3', 'C4'],
+    'G': rna_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'O6', 'N1', 'C2', 'N2', 'N3', 'C4'],
+    'C': rna_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'N4', 'C5', 'C6'],
+    'U': rna_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'O4', 'C5', 'C6'],
+    'DA': dna_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'N6', 'N1', 'C2', 'N3', 'C4'],
+    'DG': dna_backbone + ['N9', 'C8', 'N7', 'C5', 'C6', 'O6', 'N1', 'C2', 'N2', 'N3', 'C4'],
+    'DC': dna_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'N4', 'C5', 'C6'],
+    'DT': dna_backbone + ['N1', 'C2', 'O2', 'N3', 'C4', 'O4', 'C5', 'C7', 'C6'],
 })
 
 # ----------------------------------------------------------------------
