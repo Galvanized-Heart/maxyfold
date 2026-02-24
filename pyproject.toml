@@ -71,4 +71,4 @@ quote-style = "double"
 docstring-code-format = true
 
 [tool.uv.sources]
-protdiff = { workspace = true }
+maxyfold = { workspace = true }
