@@ -3,7 +3,6 @@ from .download.pdb_downloader import PDBDownloader
 from .storage.lmdb_io import LMDBWriter
 
 from .processing.pdb_processor import PDBProcessor
-from .processing.all_atom_processor import AllAtomProcessor
 
 from .components.tarball_reader import TarballReader
 from .components.backend import DataBackend

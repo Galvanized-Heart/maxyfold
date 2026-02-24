@@ -9,7 +9,7 @@ ROOT = rootutils.find_root(indicator=".project-root")
 REAL_DATA_DIR = ROOT / "data/pdb/analysis"
 CCD_MAP_PATH = ROOT / "data/pdb/processed/ccd_atoms.json"
 
-from maxyfold.data.processing.all_atom_processor import AllAtomProcessor
+from maxyfold.data.processing.pdb_processor import PDBProcessor
 from maxyfold.data.constants import MAX_ATOM_COUNT, LIGAND_IDX, UNK_IDX
 
 
@@ -25,7 +25,7 @@ def test_real_structure_100D():
     we spent so much time debugging.
     """
     # 1. Initialize with the CCD map
-    processor = AllAtomProcessor(ligand_map_path=str(CCD_MAP_PATH))
+    processor = PDBProcessor(ligand_map_path=str(CCD_MAP_PATH))
     
     # 2. Load the file content
     with open(REAL_DATA_DIR / "100D.cif", "r") as f:

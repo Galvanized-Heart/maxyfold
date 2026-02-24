@@ -1,127 +1,220 @@
-import gzip
-import io
-import os
-import tempfile
 import numpy as np
-import warnings
-from typing import Dict, Any, Optional, List
-from Bio.PDB.PDBExceptions import PDBConstructionWarning
-
+import json
+from pathlib import Path
 try:
-    from pdbfixer import PDBFixer
-    from openmm import app as openmm_app
-    from openmm import unit
+    import gemmi
 except ImportError:
-    raise ImportError("PDBFixer/OpenMM not installed.")
+    pass
 
-warnings.simplefilter('ignore', PDBConstructionWarning)
+from maxyfold.data.constants import (
+    ATOM_MAPS, res_to_idx, MAX_ATOM_COUNT, 
+    UNK_IDX, LIGAND_IDX, get_element_id
+)
 
 class PDBProcessor:
-    def __init__(self):
-        # 3-letter to 1-letter mapping
-        self.aa_map = {
-            'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F',
-            'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-            'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R',
-            'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
-        }
-        # Set of valid 3-letter codes for filtering
-        self.standard_residues = set(self.aa_map.keys())
+    def __init__(self, ligand_map_path="data/pdb/processed/ccd_atoms.json"):
+        self.res_lookups = {}
+        for res, atoms in ATOM_MAPS.items():
+            self.res_lookups[res] = {name: i for i, name in enumerate(atoms)}
 
-    def parse_cif_content(self, file_content: bytes, pdb_id: str) -> Optional[Dict[str, Any]]:
-        # Create temp pdb file
-        with tempfile.NamedTemporaryFile(suffix=".cif", mode='wb', delete=False) as tmp_file:
-            with gzip.open(io.BytesIO(file_content), 'rb') as gz_f:
-                tmp_file.write(gz_f.read())
-            tmp_path = tmp_file.name
+        # Protein vocab
+        self.protein_res = {'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL'}
+        
+        # Nucleic acid vocab
+        self.nucleic_res = {'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U'}
 
+        # CCD vocab
+        self.ligand_ref_atoms = {}
+        path = Path(ligand_map_path)
+        if path.exists():
+            with open(path, 'r') as f:
+                self.ligand_ref_atoms = json.load(f)
+        else:
+            print(f"Warning: Ligand atom map not found at {path}. Ligands will be ignored!")
+
+    def parse_cif_string(self, cif_string: str, pdb_id: str):
         try:
-            fixer = PDBFixer(filename=tmp_path)
-
-            # Remove hydrogens
-            fixer.removeHeterogens(keepWater=False)
-            
-            # Find gaps for masking
-            fixer.findMissingResidues()
-            fixer.missingResidues = {} 
-
-            # Fix non-standard residues
-            fixer.findNonstandardResidues()
-            fixer.replaceNonstandardResidues()
-            
-            # Fill in missing atoms
-            fixer.findMissingAtoms()
-            fixer.addMissingAtoms()
-            
-            # Remove hydrogens (just in case openmm added some during fixing)
-            modeller = openmm_app.Modeller(fixer.topology, fixer.positions)
-            modeller.deleteWater()
-            hydrogens = [atom for atom in modeller.topology.atoms() if atom.element.symbol == 'H']
-            modeller.delete(hydrogens)
-
-            return self._extract_data(modeller.topology, modeller.positions, pdb_id)
-
-        except Exception:
+            doc = gemmi.cif.read_string(cif_string)
+            if not doc: return None
+            block = doc[0]
+            st = gemmi.make_structure_from_block(block)
+            model = st[0]
+        except Exception as e:
             return None
 
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+        # Pass the CIF block to get polymer
+        entity_types, chain_to_entity = self._get_entity_info(block)
 
-    def _extract_data(self, topology: Any, positions: List[Any], pdb_id: str) -> Optional[Dict[str, Any]]:
-        # Iterator for efficient access
-        pos_iter = iter(positions)
+        data = {"res_type": [], "coords": [], "mask": [], "atom_elements": [], "chain_ids": []}
         
-        chains_data = []
+        chain_counter = 0
         
-        for chain in topology.chains():
-            chain_coords = []
-            chain_seq_list = []
-            chain_mask = []
+        for chain in model:
+            # Get entity label
+            subchains = chain.subchains()
+            label_asym_id = subchains[0].subchain_id() if len(subchains) > 0 else chain.name
+            entity_id = chain_to_entity.get(label_asym_id)
             
-            for residue in chain.residues():
-                # Skip non-standard residues
-                if residue.name not in self.standard_residues:
-                    for _ in residue.atoms(): next(pos_iter)
-                    continue
-
-                # Map atoms
-                res_atoms = {atom.name: next(pos_iter).value_in_unit(unit.angstroms) for atom in residue.atoms()}
+            if not entity_id: 
+                continue
                 
-                # Check Backbone
-                try:
-                    bb = [res_atoms[n] for n in ['N', 'CA', 'C', 'O']]
-                    chain_coords.append(bb)
-                    chain_mask.append(1)
-                    # Convert 3-letter to 1-letter immediately
-                    chain_seq_list.append(self.aa_map[residue.name])
-                except KeyError:
-                    # Masking Case: Missing atoms
-                    chain_coords.append([[0,0,0]] * 4)
-                    chain_mask.append(0)
-                    chain_seq_list.append(self.aa_map[residue.name])
-
-            if not chain_coords:
-                continue
+            base_type = entity_types.get(entity_id)
             
-            # Convert sequence list to single str
-            sequence_str = "".join(chain_seq_list)
-            
-            # Convert mask to bool
-            mask_np = np.array(chain_mask, dtype=np.bool_)
-            
-            # Remove structures with <10 aa or <20% of total aa in sequence
-            if len(sequence_str) < 10 or mask_np.mean() < 0.2:
+            # Skip water entities
+            if base_type == "water":
                 continue
 
-            chains_data.append({
-                "chain_id": chain.id,
-                "sequence": sequence_str,
-                "coords": np.array(chain_coords, dtype=np.float32), 
-                "mask": mask_np
-            })
+            residues = list(chain)
+            if not residues: 
+                continue
 
-        if not chains_data:
+            # Assign polymer type for appropriate tokenization
+            if base_type == "polymer":
+                polymer_type = self._get_chain_polymer_type(block, entity_id)
+                if polymer_type in ["PROTEIN", "NUCLEIC"]:
+                    self._process_polymer(residues, data, chain_counter)
+                else:
+                    self._process_ligand(residues, data, chain_counter)
+            
+            elif base_type == "non-polymer":
+                self._process_ligand(residues, data, chain_counter)
+            
+            chain_counter += 1
+
+        if len(data["res_type"]) == 0: 
             return None
+        
+        return {
+            "pdb_id": pdb_id,
+            "res_type": np.array(data["res_type"], dtype=np.int32),
+            "coords": np.array(data["coords"], dtype=np.float32),
+            "mask": np.array(data["mask"], dtype=np.float32),
+            "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
+            "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
+        }
 
-        return {"pdb_id": pdb_id, "chains": chains_data}
+    def _get_entity_info(self, block: gemmi.cif.Block):
+        """Extracts entity classifications and chain-to-entity mapping from a CIF Block."""
+        entity_types = {}
+        entity_loop = block.find_loop("_entity.id")
+        type_loop = block.find_loop("_entity.type")
+        if entity_loop and type_loop:
+            for entity_id, entity_type in zip(entity_loop, type_loop):
+                entity_types[entity_id] = entity_type
+
+        chain_to_entity = {}
+        asym_loop = block.find_loop("_struct_asym.id")
+        ent_id_loop = block.find_loop("_struct_asym.entity_id")
+        if asym_loop and ent_id_loop:
+            for chain_id, entity_id in zip(asym_loop, ent_id_loop):
+                chain_to_entity[chain_id] = entity_id
+
+        return entity_types, chain_to_entity
+
+    def _get_chain_polymer_type(self, block: gemmi.cif.Block, entity_id):
+        """
+        Uses a hierarchy of checks to robustly determine if a polymer
+        is a PROTEIN or a NUCLEIC acid.
+        """        
+        # Check 1 for polymer type
+        poly_type_loop = block.find_loop("_entity_poly.type")
+        poly_ent_loop = block.find_loop("_entity_poly.entity_id")
+        if poly_type_loop and poly_ent_loop:
+            for ent_id, poly_type in zip(poly_ent_loop, poly_type_loop):
+
+                # Entity type matches polymer type
+                if ent_id == entity_id:
+                    poly_type = poly_type.upper()
+                    if "PEPTIDE" in poly_type: 
+                        return "PROTEIN"
+                    if "NUCLEOTIDE" in poly_type: 
+                        return "NUCLEIC"
+        
+        # Check 2 for polymer type
+        poly_seq_ent_loop = block.find_loop("_entity_poly_seq.entity_id")
+        poly_seq_mon_loop = block.find_loop("_entity_poly_seq.mon_id")
+        if poly_seq_ent_loop and poly_seq_mon_loop:
+            res_list = [mon for ent, mon in zip(poly_seq_ent_loop, poly_seq_mon_loop) if ent == entity_id]
+            
+            n_prot = sum(1 for res in res_list if res in self.protein_res)
+            n_nuc = sum(1 for res in res_list if res in self.nucleic_res)
+
+            # >80% of residues are of a specific polymer type
+            if len(res_list) > 0:
+                if n_prot / len(res_list) > 0.8: 
+                    return "PROTEIN"
+                if n_nuc / len(res_list) > 0.8: 
+                    return "NUCLEIC"
+
+        return "UNKNOWN"
+
+    def _process_polymer(self, residues, data, chain_id):
+        for res in residues:
+            rname = res.name.strip().upper()
+            if rname in ['HOH', 'DOD', 'WAT']: 
+                continue
+            
+            token_id = res_to_idx.get(rname, UNK_IDX)
+            atom_map = self.res_lookups.get(rname, self.res_lookups.get('UNK', {}))
+            
+            token_coords = np.zeros((MAX_ATOM_COUNT, 3), dtype=np.float32)
+            token_mask = np.zeros(MAX_ATOM_COUNT, dtype=np.float32)
+            token_elems = np.zeros(MAX_ATOM_COUNT, dtype=np.int32)
+            
+            for atom in res:
+                aname = atom.name
+                if "'" in aname: 
+                    aname = aname.replace("'", "'")
+                if aname == "O1P": 
+                    aname = "OP1"
+                if aname == "O2P": 
+                    aname = "OP2"
+                
+                idx = atom_map.get(aname, -1)
+                if idx != -1:
+                    token_coords[idx] = [atom.pos.x, atom.pos.y, atom.pos.z]
+                    token_mask[idx] = 1.0
+                    token_elems[idx] = get_element_id(atom.element.name)
+            
+            data["res_type"].append(token_id)
+            data["coords"].append(token_coords)
+            data["mask"].append(token_mask)
+            data["atom_elements"].append(token_elems)
+            data["chain_ids"].append(chain_id)
+
+    def _process_ligand(self, residues, data, chain_id):
+        for res in residues:
+            rname = res.name.strip().upper()
+            if rname in ['HOH', 'DOD', 'WAT', 'SOL']: 
+                continue
+
+            # Get full atom list from CCD
+            reference_atoms = self.ligand_ref_atoms.get(rname)
+            
+            # Skip if there's no CCD entry
+            if not reference_atoms:
+                continue 
+
+            # Map atoms present in cif file
+            pdb_atoms = {atom.name.strip(): atom for atom in res}
+
+            for ref_atom_name, ref_element in reference_atoms:
+                token_coords = np.zeros((MAX_ATOM_COUNT, 3), dtype=np.float32)
+                token_mask = np.zeros(MAX_ATOM_COUNT, dtype=np.float32)
+                token_elems = np.zeros(MAX_ATOM_COUNT, dtype=np.int32)
+                
+                token_elems[0] = get_element_id(ref_element)
+                
+                # Create mask
+                if ref_atom_name in pdb_atoms:
+                    atom = pdb_atoms[ref_atom_name]
+                    token_coords[0] = [atom.pos.x, atom.pos.y, atom.pos.z]
+                    token_mask[0] = 1.0
+                else:
+                    token_mask[0] = 0.0
+                
+                data["res_type"].append(LIGAND_IDX)
+                data["coords"].append(token_coords)
+                data["mask"].append(token_mask)
+                data["atom_elements"].append(token_elems)
+                data["chain_ids"].append(chain_id)

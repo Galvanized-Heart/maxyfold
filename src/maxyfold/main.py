@@ -10,7 +10,7 @@ import rootutils
 
 import click
 
-from maxyfold.data import PDBDownloader, PDBProcessor, LMDBWriter, AllAtomProcessor
+from maxyfold.data import PDBDownloader, PDBProcessor, LMDBWriter
 
 @click.group()
 def cli():
@@ -125,7 +125,7 @@ def download(ids, assemblies, ccd, batch_size):
 @click.option("--file-limit", default=0, help="Limit exact number of PDB files to process. Great for fast testing!")
 def process(output_name, file_limit):
     """Processes raw .tar.gz archives into a clean, ML-ready All-Atom LMDB dataset."""
-    from maxyfold.data import AllAtomProcessor, TarballReader
+    from maxyfold.data import PDBProcessor, TarballReader
 
     root = rootutils.find_root(indicator=".project-root")
     raw_dir = root / "data/pdb/raw/assemblies"
