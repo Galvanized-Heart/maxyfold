@@ -1,28 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "protein-diff"
+name = "maxyfold"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [
+    { name = "Maxim Kirby", email = "maxim.kirby@mail.utoronto.ca" }
+]
 requires-python = ">=3.10"
 dependencies = [
     "aiofiles>=25.1.0",
     "aiohttp>=3.13.1",
+    "biopython>=1.86",
+    "click>=8.3.0",
+    "gemmi>=0.7.4",
     "h5py>=3.15.1",
     "hydra-colorlog==1.2.0",
     "hydra-core==1.3.2",
     "hydra-optuna-sweeper==1.2.0",
     "lightning>=2.0.0",
+    "lmdb>=1.7.5",
+    "matplotlib>=3.10.8",
     "numpy>=2.2.6",
     "openmm>=8.4.0.post1",
+    "pandas>=2.3.3",
     "pdbfixer-wheel>=1.11.0", # This is an unofficial fork of the pdbfixer repo for PyPI installation
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
     "requests>=2.32.5",
     "rich>=14.2.0",
     "rootutils>=1.0.7",
+    "safetensors>=0.7.0",
+    "seaborn>=0.13.2",
     "tdqm>=0.0.1",
     "torch>=2.0.0",
     "torchmetrics>=0.11.4",
     "torchvision>=0.15.0",
     "tqdm>=4.67.1",
+    "wandb>=0.24.2",
 ]
+
+[dependency-groups]
+dev = [
+    "maxyfold",
+]
+
+
+[project.scripts]
+maxyfold = "maxyfold.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maxyfold"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["maxyfold"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[tool.uv.sources]
+protdiff = { workspace = true }
