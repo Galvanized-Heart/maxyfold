@@ -16,3 +16,9 @@ output_dir: ${hydra:runtime.output_dir}
 
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
+
+# paths specific to pdb data
+pdb_raw_dir: ${paths.data_dir}/pdb/raw
+pdb_processed_dir: ${paths.data_dir}/pdb/processed
+ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
+lmdb_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb

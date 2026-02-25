@@ -174,3 +174,64 @@ def process(output_name, file_limit):
 
 if __name__ == '__main__':
     cli()
+
+
+
+
+import click
+import rootutils
+from omegaconf import OmegaConf
+from pathlib import Path
+
+from maxyfold.data.pipeline import DataPipelineManager
+
+# Load paths
+root = rootutils.find_root(indicator=".project-root")
+paths_cfg = OmegaConf.load(root / "configs/paths/default.yaml")
+paths_cfg = OmegaConf.create(OmegaConf.to_container(paths_cfg, resolve=True))
+
+@click.group()
+def cli():
+    """MaxyFold Data Management CLI"""
+    pass
+
+@cli.command()
+@click.option('--name', default='User', help='The name to greet.')
+def hello(name):
+    """A simple hello command to test the CLI setup."""
+    click.echo(f"Hello, {name}! Welcome to MaxyFold! :D")
+
+@cli.command()
+@click.option("--ids", "-i", is_flag=True, help="Download the filtered list of PDB IDs.")
+@click.option("--assemblies", "-a", is_flag=True, help="Download the biological assembly files.")
+@click.option("--ccd", "-c", is_flag=True, help="Download the Chemical Component Dictionary.")
+@click.option("--batch-size", type=int, default=20000, help="Number of files to download before tarring.")
+def download(ids, assemblies, ccd, batch_size):
+    """Command for downloading raw PDB ids, ccd, and assemblies."""
+    if not (ids or assemblies or ccd):
+        click.echo("No specific components requested. Defaulting to download all.")
+        ids = assemblies = ccd = True
+
+    manager = DataPipelineManager(paths_cfg=paths_cfg, query_cfg=query_cfg)
+        
+    try:
+        manager.download_dataset(ids=ids, ccd=ccd, assemblies=assemblies, batch_size=batch_size)
+        click.echo(click.style("\nAll download steps completed successfully!", fg="green", bold=True))
+    except Exception as e:
+        click.echo(click.style(f"\nPipeline failed: {str(e)}", fg="red", bold=True))
+
+
+@cli.command()
+@click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
+def process(file_limit):
+    """Processes raw .tar.gz archives into a clean, ML-ready LMDB dataset."""
+    manager = DataPipelineManager(paths_cfg=paths_cfg)
+    
+    try:
+        total_complexes, total_errors = manager.process_to_lmdb(file_limit=file_limit)
+        
+        click.echo(click.style(f"\nProcessing Complete!", fg="green", bold=True))
+        click.echo(f"Total Complexes Saved: {total_complexes}")
+        click.echo(f"Skipped/Errors:        {total_errors}")
+    except Exception as e:
+        click.echo(click.style(f"\nPipeline failed: {str(e)}", fg="red", bold=True))
