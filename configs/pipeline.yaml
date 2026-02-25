@@ -1,0 +1,7 @@
+defaults:
+  - paths: default
+  - data: pdb_query
+  - _self_
+
+# A dummy task name to satisfy hydra structure
+task_name: "data_pipeline"

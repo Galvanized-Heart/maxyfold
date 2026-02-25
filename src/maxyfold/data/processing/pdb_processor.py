@@ -163,8 +163,8 @@ class PDBProcessor:
             
             for atom in res:
                 aname = atom.name
-                if "'" in aname: 
-                    aname = aname.replace("'", "'")
+                if "*" in aname:
+                    aname = aname.replace("*", "'")
                 if aname == "O1P": 
                     aname = "OP1"
                 if aname == "O2P": 

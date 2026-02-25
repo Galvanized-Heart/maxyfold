@@ -10,10 +10,10 @@ from maxyfold.data.storage.lmdb_io import LMDBWriter
 from maxyfold.data.components.tarball_reader import TarballReader
 from maxyfold.data.components.tarball_writer import TarballWriter
 
-class DataPipelineManager:
-    """Orchestrates the downloading, compressing, and processing of datasets."""
+
 
 class DataPipelineManager:
+    """Orchestrates the downloading, compressing, and processing of datasets."""
     def __init__(self, paths_cfg, query_cfg=None):
         self.paths = paths_cfg
         self.query_cfg = query_cfg
@@ -29,22 +29,20 @@ class DataPipelineManager:
         self.ccd_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
-    def download_dataset(self, ids=True, ccd=True, assemblies=True, batch_size=20000):
+    def download_dataset(self, ids=True, ccd=True, assemblies=True, batch_size=20000, limit=0):
         """Runs the requested download steps."""
-        downloader = PDBDownloader()
+        downloader = PDBDownloader(query_cfg=self.query_cfg)
         
         if ids:
-            print("Fetching PDB IDs...")
-            downloader.fetch_filtered_ids(output_file_rel=self.raw_dir / "pdb_ids.txt")
+            downloader.fetch_filtered_ids(output_file=self.raw_dir / "pdb_ids.txt")
             
         if ccd:
-            print("\nDownloading CCD...")
-            downloader.download_ccd(output_dir_rel=str(self.ccd_dir))
+            downloader.download_ccd(output_dir=str(self.ccd_dir))
             
         if assemblies:
-            self._download_and_batch_assemblies(downloader, batch_size)
+            self._download_and_batch_assemblies(downloader, batch_size, limit)
 
-    def _download_and_batch_assemblies(self, downloader, batch_size):
+    def _download_and_batch_assemblies(self, downloader, batch_size, limit):
         """Handles the batching, async downloading, and tarballing."""
         id_file_path = self.raw_dir / "pdb_ids.txt"
         if not id_file_path.exists():
@@ -52,6 +50,10 @@ class DataPipelineManager:
 
         with open(id_file_path, "r") as f:
             all_pdb_ids = [line.strip().upper() for line in f if line.strip()]
+
+        if limit > 0:
+            all_pdb_ids = all_pdb_ids[:limit]
+            print(f"\nLimiting download to the first {limit} structures.")
         
         total_files = len(all_pdb_ids)
         num_batches = math.ceil(total_files / batch_size)
@@ -99,7 +101,7 @@ class DataPipelineManager:
     def process_to_lmdb(self, file_limit=0):
         """Converts raw tarballs to ML-ready LMDB."""
         lmdb_path = Path(self.paths.lmdb_path)
-        ccd_atoms_path = self.paths.ccd_path
+        ccd_atoms_path = self.paths.ccd_atoms_map_path
         
         tar_files = sorted(list(self.assemblies_dir.glob("assemblies_batch_*.tar.gz")))
         if not tar_files:

@@ -1,6 +1,7 @@
 # path to root directory
-# this requires PROJECT_ROOT environment variable to exist
-# you can replace it with "." if you want the root to be the current working directory
+# this requires PROJECT_ROOT environment variable to exist 
+# run `export PROJECT_ROOT=$(pwd)` to set to current dir
+# verify PROJECT_ROOT was updated by running `echo $PROJECT_ROOT`
 root_dir: ${oc.env:PROJECT_ROOT}
 
 # path to data directory
@@ -21,4 +22,5 @@ work_dir: ${hydra:runtime.cwd}
 pdb_raw_dir: ${paths.data_dir}/pdb/raw
 pdb_processed_dir: ${paths.data_dir}/pdb/processed
 ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
+ccd_atoms_map_path: ${paths.pdb_processed_dir}/ccd_atoms.json
 lmdb_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb
