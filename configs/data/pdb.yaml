@@ -1,4 +1,4 @@
-_target_: maxyfold.data.datamodules.mnist_datamodule.MNISTDataModule
+_target_: maxyfold.data.datamodules.pdb_datamodule.PDBDataModule
 data_dir: ${paths.data_dir}
 batch_size: 128 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
 train_val_test_split: [55_000, 5_000, 10_000]
