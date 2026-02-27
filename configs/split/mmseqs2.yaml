@@ -1,10 +1,12 @@
 # MMseqs2 Parameters
-seq_id: 0.3
-coverage: 0.8
-cov_mode: 0          # 0 = bidirectional coverage
-cluster_mode: 0      # 0 = greedy set cover
-threads: 8
+ mmseqs:
+    seq_id: 0.3
+    coverage: 0.8
+    cov_mode: 0
+    cluster_mode: 0
+    threads: 8
 
 # Splitting Logic
-ratios: [0.9, 0.05, 0.05] # Ratios must sum to 1.0
-seed: 42
+ splitting:
+    ratios: [0.9, 0.05, 0.05]
+    seed: 42

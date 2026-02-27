@@ -1,5 +1,3 @@
-# In new file: src/maxyfold/data/splits/splitter.py
-
 import lmdb
 import tempfile
 import subprocess
@@ -15,7 +13,6 @@ from maxyfold.data.components.tarball_reader import TarballReader
 try:
     import gemmi
 except ImportError:
-    # This should not happen if the environment is set up correctly
     raise ImportError("Gemmi is required for splitting. Please install it.")
 
 class PDBDataSplitter:
@@ -25,7 +22,6 @@ class PDBDataSplitter:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # --- Using your configurable parameters ---
         self.config = {
             "seq_id": kwargs.get("seq_id", 0.3),
             "coverage": kwargs.get("coverage", 0.8),
@@ -40,15 +36,12 @@ class PDBDataSplitter:
         self.res_map = gemmi.standard_res_map()
 
     def _extract_protein_sequences(self, keys_to_process: set) -> dict:
-        # This part is the same as my original sketch
         print("Extracting protein sequences from raw files...")
         sequences = {}
+
+        # Iterate over cif files
         tar_files = sorted(list(self.raw_assemblies_dir.glob("assemblies_batch_*.tar.gz")))
-        
-        # We need a way to map PDB IDs back to their tarball for quick access
-        # For now, TarballReader is fine, but could be optimized if slow.
         cif_stream = TarballReader(tar_paths=tar_files)
-        
         for pdb_id, cif_string in tqdm(cif_stream, desc="Extracting Seqs"):
             if pdb_id.upper() not in keys_to_process:
                 continue
@@ -58,7 +51,7 @@ class PDBDataSplitter:
                 block = doc.sole_block()
                 st = gemmi.make_structure_from_block(block)
                 
-                for chain in st[0]: # model 0
+                for chain in st[0]:
                     seq = gemmi.one_letter_sequence(chain.get_polymer(), self.res_map)
                     if seq and len(seq) > 20: # Filter out short peptides
                         chain_id = f"{pdb_id.upper()}_{chain.name}"
@@ -68,7 +61,7 @@ class PDBDataSplitter:
         return sequences
 
     def run_mmseqs2_clustering(self, sequences: dict, work_dir: Path) -> pd.DataFrame:
-        """Runs MMseqs2 and returns a pandas DataFrame of the clusters."""
+        """Runs MMseqs2 and return DataFrame of the clusters."""
         fasta_path = work_dir / "sequences.fasta"
         
         print(f"Writing {len(sequences)} sequences to FASTA file...")
@@ -77,7 +70,6 @@ class PDBDataSplitter:
                 f.write(f">{chain_id}\n{seq}\n")
         
         print("Running MMseqs2 clustering...")
-        # --- Using your more robust, multi-step command invocation ---
         db_path = work_dir / "DB"
         cluster_path = work_dir / "clu"
         tmp_path = work_dir / "tmp"
@@ -97,7 +89,6 @@ class PDBDataSplitter:
         
         for cmd in cmds:
             try:
-                # Use capture_output=True to hide MMseqs2's verbose output unless there's an error
                 subprocess.run(cmd, check=True, text=True, capture_output=True)
             except subprocess.CalledProcessError as e:
                 print(f"MMseqs2 command failed: {' '.join(cmd)}")
@@ -107,22 +98,23 @@ class PDBDataSplitter:
         return pd.read_csv(tsv_path, sep='\t', header=None, names=['representative', 'member'])
 
     def assign_splits(self, cluster_df: pd.DataFrame):
-        """Uses your more robust splitting logic."""
+        """Robust splitting logic."""
         # Get unique PDB IDs from member chain IDs
         cluster_df['pdb_id'] = cluster_df['member'].apply(lambda x: x.split('_')[0])
         
-        # Group members by their representative (i.e., by cluster)
+        # Group cluster
         clusters = cluster_df.groupby('representative')['pdb_id'].apply(set).tolist()
         
         print(f"Found {len(clusters)} clusters. Assigning to splits with seed {self.config['seed']}...")
         
-        # --- Using your reproducible shuffling ---
+        # Reproducible shuffle
         rng = random.Random(self.config['seed'])
         rng.shuffle(clusters)
         
         n_clusters = len(clusters)
         ratios = self.config['split_ratios']
         
+        # Create splits
         train_end = int(ratios[0] * n_clusters)
         val_end = train_end + int(ratios[1] * n_clusters)
         
@@ -134,7 +126,7 @@ class PDBDataSplitter:
         val_set = set().union(*val_reps)
         test_set = set().union(*test_reps)
 
-        # Final cleanup to ensure strict separation
+        # Ensure strict separation
         val_set -= train_set
         test_set -= (train_set | val_set)
 

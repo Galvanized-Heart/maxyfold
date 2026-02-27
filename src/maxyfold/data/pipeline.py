@@ -1,14 +1,7 @@
-import asyncio
-import math
 import os
+import math
 from pathlib import Path
-from tqdm import tqdm
-
-from maxyfold.data.download.pdb_downloader import PDBDownloader
-from maxyfold.data.processing.pdb_processor import PDBProcessor
-from maxyfold.data.storage.lmdb_io import LMDBWriter
-from maxyfold.data.components.tarball_reader import TarballReader
-from maxyfold.data.components.tarball_writer import TarballWriter
+from typing import Dict, Any
 
 
 
@@ -31,6 +24,8 @@ class DataPipelineManager:
 
     def download_dataset(self, ids=True, ccd=True, assemblies=True, batch_size=20000, limit=0):
         """Runs the requested download steps."""
+        from maxyfold.data.download.pdb_downloader import PDBDownloader
+        
         downloader = PDBDownloader(query_cfg=self.query_cfg)
         
         if ids:
@@ -44,6 +39,9 @@ class DataPipelineManager:
 
     def _download_and_batch_assemblies(self, downloader, batch_size, limit):
         """Handles the batching, async downloading, and tarballing."""
+        import asyncio
+        from maxyfold.data.components.tarball_writer import TarballWriter
+
         id_file_path = self.raw_dir / "pdb_ids.txt"
         if not id_file_path.exists():
             raise FileNotFoundError(f"PDB ID list not found at {id_file_path}. Run with '--ids' first.")
@@ -60,7 +58,6 @@ class DataPipelineManager:
         
         print(f"\nProcessing {total_files} structures in {num_batches} batches of {batch_size}...")
 
-        # Windows async event loop policy fix
         if os.name == 'nt':
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -100,6 +97,11 @@ class DataPipelineManager:
 
     def process_to_lmdb(self, file_limit=0):
         """Converts raw tarballs to ML-ready LMDB."""
+        from tqdm import tqdm
+        from maxyfold.data.processing.pdb_processor import PDBProcessor
+        from maxyfold.data.storage.lmdb_io import LMDBWriter
+        from maxyfold.data.components.tarball_reader import TarballReader
+
         lmdb_path = Path(self.paths.lmdb_path)
         ccd_atoms_path = self.paths.ccd_atoms_map_path
         
@@ -129,3 +131,16 @@ class DataPipelineManager:
                     total_errors += 1
 
         return total_complexes, total_errors
+
+    def create_splits(self, mmseqs_config: Dict, splitting_config: Dict):
+        """Orchestrates the data splitting process."""
+        from maxyfold.data.splits.splitter import PDBDataSplitter
+
+        splitter = PDBDataSplitter(
+            lmdb_path=self.paths.lmdb_path,
+            raw_assemblies_dir=self.assemblies_dir,
+            output_dir=self.processed_dir,
+            mmseqs_config=mmseqs_config,
+            splitting_config=splitting_config
+        )
+        splitter.create()

@@ -2,10 +2,8 @@ import click
 import rootutils
 from hydra import initialize, compose
 from hydra.core.global_hydra import GlobalHydra
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 import shutil
-
-from maxyfold.data.pipeline import DataPipelineManager
 
 # Load root path
 root = rootutils.find_root(indicator=".project-root")
@@ -61,6 +59,7 @@ def show_config(config_name, overrides):
 def download(ids, assemblies, ccd, batch_size, file_limit):
     """Command for downloading raw PDB ids, ccd, and assemblies."""
     click.echo("Downloading raw PDB files...")
+    from maxyfold.data.pipeline import DataPipelineManager
 
     if not (ids or assemblies or ccd):
         click.echo("No specific components requested. Defaulting to download all.")
@@ -87,12 +86,12 @@ def download(ids, assemblies, ccd, batch_size, file_limit):
 def process(file_limit):
     """Processes raw tar archives into clean LMDB dataset."""
     click.echo("Processing raw PDB files...")
+    from maxyfold.data.pipeline import DataPipelineManager
 
     manager = DataPipelineManager(paths_cfg=cfg.paths)
 
     try:
         total_complexes, total_errors = manager.process_to_lmdb(file_limit=file_limit)
-        
         click.echo(click.style(f"\nProcessing Complete!", fg="green", bold=True))
         click.echo(f"Total Complexes Saved: {total_complexes}")
         click.echo(f"Skipped/Errors:        {total_errors}")
@@ -101,24 +100,23 @@ def process(file_limit):
 
 
 
-
 @cli.command()
-@click.option("--seq-id", default=0.3, type=float, help="MMseqs2: Minimum sequence identity for clustering.")
-@click.option("--coverage", default=0.8, type=float, help="MMseqs2: Minimum sequence coverage.")
-@click.option("--cov-mode", default=0, type=int, help="MMseqs2: Coverage mode (0-5).")
-@click.option("--cluster-mode", default=0, type=int, help="MMseqs2: Clustering algorithm (0-2).")
-@click.option("--split-ratios", default="0.9,0.05,0.05", help="Comma-separated train,val,test ratios.")
-@click.option("--seed", default=42, type=int, help="Random seed for splitting clusters.")
-def split(seq_id, coverage, cov_mode, cluster_mode, split_ratios, seed):
+@click.option("--seq-id", default=cfg.split.mmseqs.seq_id, type=float, help="MMseqs2: Min sequence identity.")
+@click.option("--coverage", default=cfg.split.mmseqs.coverage, type=float, help="MMseqs2: Min sequence coverage.")
+@click.option("--cov-mode", default=cfg.split.mmseqs.cov_mode, type=int, help="MMseqs2: Coverage mode.")
+@click.option("--cluster-mode", default=cfg.split.mmseqs.cluster_mode, type=int, help="MMseqs2: Clustering algorithm.")
+@click.option("--seed", default=cfg.split.splitting.seed, type=int, help="Random seed for splitting.")
+def split(seq_id, coverage, cov_mode, cluster_mode, seed):
     """Clusters processed PDBs by sequence identity and creates train/val/test splits."""
     click.echo("Creating data splits using MMseqs2...")
-    
+    from maxyfold.data.pipeline import DataPipelineManager
+
     # Input validation
     try:
-        ratios = [float(r) for r in split_ratios.split(',')]
+        ratios = list(cfg.split.ratios)
         total_sum = sum(ratios)
         if len(ratios) != 3 or total_sum != 1.0:
-            raise ValueError("Ratios must be three comma-separated numbers that sum to 1.0")
+            click.echo(click.style(f"Config Error: Split ratios in pipeline.yaml must sum to 1.0", fg="red"))
     except ValueError as e:
         click.echo(click.style(f"Invalid --split-ratios: {e}", fg="red"))
         return
@@ -128,22 +126,28 @@ def split(seq_id, coverage, cov_mode, cluster_mode, split_ratios, seed):
         click.echo(click.style("Error: 'mmseqs' command not found in PATH.\n\nTry running:\n  sudo apt-get update\n  sudo apt-get install mmseqs2", fg="red"))
         return
 
+    # Copy configs
+    mmseqs_config = cfg.split.mmseqs.copy()
+    splitting_config = cfg.split.splitting.copy()
+
+    # Update configs with args
+    with open_dict(mmseqs_config):
+        mmseqs_config.seq_id = seq_id
+        mmseqs_config.coverage = coverage
+        mmseqs_config.cov_mode = cov_mode
+        mmseqs_config.cluster_mode = cluster_mode
+    with open_dict(splitting_config):
+        splitting_config.seed = seed
+
     manager = DataPipelineManager(paths_cfg=cfg.paths)
 
-    splitter = PDBDataSplitter(
-        lmdb_path=manager.paths.lmdb_path,
-        raw_assemblies_dir=manager.assemblies_dir,
-        output_dir=manager.processed_dir,
-        seq_id=seq_id,
-        coverage=coverage,
-        cov_mode=cov_mode,
-        cluster_mode=cluster_mode,
-        split_ratios=ratios,
-        seed=seed
-    )
-    
     try:
-        splitter.create()
+        manager.create_splits(mmseqs_config, splitting_config)
         click.echo(click.style("\nData splits created successfully!", fg="green", bold=True))
     except Exception as e:
         click.echo(click.style(f"\nSplitting failed: {str(e)}", fg="red", bold=True))
+
+
+
+if __name__ == "__main__":
+    cli()
