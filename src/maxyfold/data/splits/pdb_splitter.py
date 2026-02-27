@@ -9,6 +9,7 @@ import shutil
 import numpy as np
 
 from maxyfold.data.components.tarball_reader import TarballReader
+from maxyfold.data.constants.atom_constants import AA_3_TO_1
 
 try:
     import gemmi
@@ -24,17 +25,17 @@ class PDBDataSplitter:
         self.limit = limit
         
         self.config = {
-            "seq_id": kwargs.get("seq_id", 0.3),
-            "coverage": kwargs.get("coverage", 0.8),
-            "cov_mode": kwargs.get("cov_mode", 0),
-            "cluster_mode": kwargs.get("cluster_mode", 0),
-            "split_ratios": kwargs.get("split_ratios", (0.9, 0.05, 0.05)),
-            "seed": kwargs.get("seed", 42),
-            "threads": kwargs.get("threads", 8)
-        }
+        "seq_id": mmseqs_config['seq_id'],
+        "coverage": mmseqs_config['coverage'],
+        "cov_mode": mmseqs_config['cov_mode'],
+        "cluster_mode": mmseqs_config['cluster_mode'],
+        "threads": mmseqs_config.get('threads', 8),
+        "split_ratios": splitting_config['ratios'],
+        "seed": splitting_config['seed']
+    }
         
         # Mapping from 3-letter to 1-letter AA code
-        self.res_map = gemmi.standard_res_map()
+        self.res_map = AA_3_TO_1
 
     def _extract_protein_sequences(self, keys_to_process: set) -> dict:
         print("Extracting protein sequences from raw files...")

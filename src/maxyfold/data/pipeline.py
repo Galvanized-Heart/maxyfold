@@ -134,7 +134,7 @@ class DataPipelineManager:
 
     def create_splits(self, mmseqs_config: Dict, splitting_config: Dict, limit: int = 0):
         """Orchestrates the data splitting process."""
-        from maxyfold.data.splits.splitter import PDBDataSplitter
+        from maxyfold.data.splits.pdb_splitter import PDBDataSplitter
 
         splitter = PDBDataSplitter(
             lmdb_path=self.paths.lmdb_path,
