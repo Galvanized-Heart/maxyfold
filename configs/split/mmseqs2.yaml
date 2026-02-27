@@ -1,12 +1,33 @@
 # MMseqs2 Parameters
- mmseqs:
+mmseqs:
+    # MINIMUM SEQUENCE IDENTITY (0.0 - 1.0)
+    # The minimum fraction of aligned residues required to cluster two sequences.
+    # 0.9-1.0: Very strict (remove duplicates).
+    # 0.3-0.4: Remote homology (structure prediction standard).
     seq_id: 0.3
+
+    # COVERAGE (0.0 - 1.0)
+    # The minimum fraction of the sequence length that must be aligned.
+    # Prevents clustering a small domain match with a full-length protein.
     coverage: 0.8
+
+    # COVERAGE MODE (0, 1, 2, 3, 4, 5)
+    # Controls how the coverage threshold is calculated between Query (Q) and Target (T).
+    # 0: Bidirectional (Default). Both Q and T must satisfy coverage. Best for domain matching.
+    # 1: Target coverage. Only T must be covered.
+    # 2: Query coverage. Only Q must be covered.
+    # For remaining options, see notes at https://github.com/Galvanized-Heart/mmseqs_splitting/blob/main/README.md.
     cov_mode: 0
+
+    # CLUSTER MODE
+    # The algorithm used to group sequences.
+    # 0: Greedy Set Cover (Default). Fast. Approximates minimum number of clusters.
+    # 1: Connected Component. Transitive (A=B, B=C -> A=C). Creates larger, looser clusters.
+    # 2: CD-HIT style greedy. Sorts by length.
     cluster_mode: 0
-    threads: 8
 
 # Splitting Logic
- splitting:
+splitting:
+   # Ratios between train, valid, test sets. Must sum to 1.0.
     ratios: [0.9, 0.05, 0.05]
     seed: 42
