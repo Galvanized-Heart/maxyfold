@@ -55,7 +55,7 @@ def show_config(config_name, overrides):
 @click.option("--assemblies", "-a", is_flag=True, help="Download the biological assembly files.")
 @click.option("--ccd", "-c", is_flag=True, help="Download the Chemical Component Dictionary.")
 @click.option("--batch-size", type=int, default=20000, help="Number of files to download before tarring.")
-@click.option("--file-limit", type=int, default=0, help="Limit the number of PDBs to download (0 for all). Useful for testing.")
+@click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
 def download(ids, assemblies, ccd, batch_size, file_limit):
     """Command for downloading raw PDB ids, ccd, and assemblies."""
     click.echo("Downloading raw PDB files...")
@@ -106,7 +106,8 @@ def process(file_limit):
 @click.option("--cov-mode", default=cfg.split.mmseqs.cov_mode, type=int, help="MMseqs2: Coverage mode.")
 @click.option("--cluster-mode", default=cfg.split.mmseqs.cluster_mode, type=int, help="MMseqs2: Clustering algorithm.")
 @click.option("--seed", default=cfg.split.splitting.seed, type=int, help="Random seed for splitting.")
-def split(seq_id, coverage, cov_mode, cluster_mode, seed):
+@click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
+def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
     """Clusters processed PDBs by sequence identity and creates train/val/test splits."""
     click.echo("Creating data splits using MMseqs2...")
     from maxyfold.data.pipeline import DataPipelineManager
@@ -142,7 +143,7 @@ def split(seq_id, coverage, cov_mode, cluster_mode, seed):
     manager = DataPipelineManager(paths_cfg=cfg.paths)
 
     try:
-        manager.create_splits(mmseqs_config, splitting_config)
+        manager.create_splits(mmseqs_config, splitting_config, limit=file_limit)
         click.echo(click.style("\nData splits created successfully!", fg="green", bold=True))
     except Exception as e:
         click.echo(click.style(f"\nSplitting failed: {str(e)}", fg="red", bold=True))

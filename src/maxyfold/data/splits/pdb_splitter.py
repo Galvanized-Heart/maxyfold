@@ -16,11 +16,12 @@ except ImportError:
     raise ImportError("Gemmi is required for splitting. Please install it.")
 
 class PDBDataSplitter:
-    def __init__(self, lmdb_path, raw_assemblies_dir, output_dir, **kwargs):
+    def __init__(self, lmdb_path, raw_assemblies_dir, output_dir, mmseqs_config, splitting_config, limit: int = 0):
         self.lmdb_path = Path(lmdb_path)
         self.raw_assemblies_dir = Path(raw_assemblies_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.limit = limit
         
         self.config = {
             "seq_id": kwargs.get("seq_id", 0.3),
@@ -146,6 +147,13 @@ class PDBDataSplitter:
         env = lmdb.open(str(self.lmdb_path), readonly=True, subdir=False, lock=False)
         with env.begin() as txn:
             processed_keys = {key.decode('ascii').upper() for key in txn.cursor().iternext(values=False)}
+
+        if self.limit > 0:
+            print(f"Limiting splitting to first {self.limit} entries.")
+            processed_keys = set(processed_keys[:self.limit])
+        else:
+            processed_keys = set(processed_keys)
+        
         print(f"Found {len(processed_keys)} successfully processed entries in LMDB.")
         
         sequences = self._extract_protein_sequences(processed_keys)

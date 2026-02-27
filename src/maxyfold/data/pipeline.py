@@ -132,7 +132,7 @@ class DataPipelineManager:
 
         return total_complexes, total_errors
 
-    def create_splits(self, mmseqs_config: Dict, splitting_config: Dict):
+    def create_splits(self, mmseqs_config: Dict, splitting_config: Dict, limit: int = 0):
         """Orchestrates the data splitting process."""
         from maxyfold.data.splits.splitter import PDBDataSplitter
 
@@ -141,6 +141,7 @@ class DataPipelineManager:
             raw_assemblies_dir=self.assemblies_dir,
             output_dir=self.processed_dir,
             mmseqs_config=mmseqs_config,
-            splitting_config=splitting_config
+            splitting_config=splitting_config,
+            limit=limit,
         )
         splitter.create()
