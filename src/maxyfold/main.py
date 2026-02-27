@@ -3,6 +3,7 @@ import rootutils
 from hydra import initialize, compose
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
+import shutil
 
 from maxyfold.data.pipeline import DataPipelineManager
 
@@ -37,7 +38,7 @@ def hello(name):
 def show_config(config_name, overrides):
     """Helper function to display the resolved Hydra configuration."""
     try:
-        # Re-initialize to allow dynamic config selection and overrides
+        # Reinitialize to allow dynamic config selection and overrides
         GlobalHydra.instance().clear()
         with initialize(version_base="1.3", config_path="../../configs"):
             resolved_cfg = compose(config_name=config_name, overrides=list(overrides))
@@ -97,3 +98,52 @@ def process(file_limit):
         click.echo(f"Skipped/Errors:        {total_errors}")
     except Exception as e:
         click.echo(click.style(f"\nPipeline failed: {str(e)}", fg="red", bold=True))
+
+
+
+
+@cli.command()
+@click.option("--seq-id", default=0.3, type=float, help="MMseqs2: Minimum sequence identity for clustering.")
+@click.option("--coverage", default=0.8, type=float, help="MMseqs2: Minimum sequence coverage.")
+@click.option("--cov-mode", default=0, type=int, help="MMseqs2: Coverage mode (0-5).")
+@click.option("--cluster-mode", default=0, type=int, help="MMseqs2: Clustering algorithm (0-2).")
+@click.option("--split-ratios", default="0.9,0.05,0.05", help="Comma-separated train,val,test ratios.")
+@click.option("--seed", default=42, type=int, help="Random seed for splitting clusters.")
+def split(seq_id, coverage, cov_mode, cluster_mode, split_ratios, seed):
+    """Clusters processed PDBs by sequence identity and creates train/val/test splits."""
+    click.echo("Creating data splits using MMseqs2...")
+    
+    # Input validation
+    try:
+        ratios = [float(r) for r in split_ratios.split(',')]
+        total_sum = sum(ratios)
+        if len(ratios) != 3 or total_sum != 1.0:
+            raise ValueError("Ratios must be three comma-separated numbers that sum to 1.0")
+    except ValueError as e:
+        click.echo(click.style(f"Invalid --split-ratios: {e}", fg="red"))
+        return
+    
+    # Check for mmseqs2
+    if not shutil.which("mmseqs"):
+        click.echo(click.style("Error: 'mmseqs' command not found in PATH.\n\nTry running:\n  sudo apt-get update\n  sudo apt-get install mmseqs2", fg="red"))
+        return
+
+    manager = DataPipelineManager(paths_cfg=cfg.paths)
+
+    splitter = PDBDataSplitter(
+        lmdb_path=manager.paths.lmdb_path,
+        raw_assemblies_dir=manager.assemblies_dir,
+        output_dir=manager.processed_dir,
+        seq_id=seq_id,
+        coverage=coverage,
+        cov_mode=cov_mode,
+        cluster_mode=cluster_mode,
+        split_ratios=ratios,
+        seed=seed
+    )
+    
+    try:
+        splitter.create()
+        click.echo(click.style("\nData splits created successfully!", fg="green", bold=True))
+    except Exception as e:
+        click.echo(click.style(f"\nSplitting failed: {str(e)}", fg="red", bold=True))
