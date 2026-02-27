@@ -1,6 +1,7 @@
 defaults:
   - paths: default
-  - data: pdb_query
+  - query: pdb
+  - split: mmseqs2
   - _self_
 
 # A dummy task name to satisfy hydra structure

@@ -5,15 +5,17 @@ import numpy as np
 from .backend import DataBackend
 
 class LMDBBackend(DataBackend):
-    def __init__(self, path: str):
+    def __init__(self, path: str, keys: list[bytes] = None):
         self.path = path
         self.env = None
-        self.keys = None
-
-        # Preload keys
-        with lmdb.open(path, subdir=False, readonly=True, lock=False) as env:
-            with env.begin() as txn:
-                self.keys = list(txn.cursor().iternext(values=False))
+        
+        # Open data subset if keys is defined
+        if keys is None:
+            with lmdb.open(path, subdir=False, readonly=True, lock=False) as env:
+                with env.begin() as txn:
+                    self.keys = list(txn.cursor().iternext(values=False))
+        else:
+            self.keys = keys
 
     def _connect(self):
         # Keep env open as long as the object is in use

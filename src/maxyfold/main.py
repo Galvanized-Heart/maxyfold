@@ -2,6 +2,7 @@ import click
 import rootutils
 from hydra import initialize, compose
 from hydra.core.global_hydra import GlobalHydra
+from omegaconf import OmegaConf
 
 from maxyfold.data.pipeline import DataPipelineManager
 
@@ -17,7 +18,7 @@ with initialize(version_base="1.3", config_path="../../configs"):
 
 @click.group()
 def cli():
-    """MaxyFold Data Management CLI"""
+    """MaxyFold data management CLI"""
     pass
 
 
@@ -27,6 +28,26 @@ def cli():
 def hello(name):
     """A simple hello command to test the CLI setup."""
     click.echo(f"Hello, {name}! Welcome to MaxyFold! :D")
+
+
+
+@cli.command()
+@click.option("--config-name", "-n", default="pipeline", help="The name of the config file (without .yaml).")
+@click.argument("overrides", nargs=-1)
+def show_config(config_name, overrides):
+    """Helper function to display the resolved Hydra configuration."""
+    try:
+        # Re-initialize to allow dynamic config selection and overrides
+        GlobalHydra.instance().clear()
+        with initialize(version_base="1.3", config_path="../../configs"):
+            resolved_cfg = compose(config_name=config_name, overrides=list(overrides))
+            
+            click.echo(click.style(f"Resolved Config: {config_name}", fg="cyan", bold=True))
+            click.echo(OmegaConf.to_yaml(resolved_cfg))
+            click.echo(click.style("-" * (len(config_name) + 25), fg="cyan"))
+            
+    except Exception as e:
+        click.echo(click.style(f"Error loading config: {e}", fg="red"))
 
 
 
@@ -44,7 +65,7 @@ def download(ids, assemblies, ccd, batch_size, file_limit):
         click.echo("No specific components requested. Defaulting to download all.")
         ids = assemblies = ccd = True
 
-    manager = DataPipelineManager(paths_cfg=cfg.paths, query_cfg=cfg.data)
+    manager = DataPipelineManager(paths_cfg=cfg.paths, query_cfg=cfg.query)
 
     try:
         manager.download_dataset(
@@ -63,7 +84,7 @@ def download(ids, assemblies, ccd, batch_size, file_limit):
 @cli.command()
 @click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
 def process(file_limit):
-    """Processes raw .tar.gz archives into a clean, ML-ready LMDB dataset."""
+    """Processes raw tar archives into clean LMDB dataset."""
     click.echo("Processing raw PDB files...")
 
     manager = DataPipelineManager(paths_cfg=cfg.paths)

@@ -113,6 +113,9 @@ class ContiguousCropper(BaseCropper):
     """
     Slices a continuous chunk. Good for learning local polymer physics.
     """
+    def __init__(self, crop_size: int = 384, pad_token_id: int = 0):
+        super().__init__(crop_size, pad_token_id)
+
     def __call__(self, data: dict) -> dict:
         L = len(data["res_type"])
         
@@ -139,6 +142,9 @@ class SpatialCropper(BaseCropper):
     """
     Random center -> Closest neighbors. Good for general 3D structure.
     """
+    def __init__(self, crop_size: int = 384, pad_token_id: int = 0):
+        super().__init__(crop_size, pad_token_id)
+
     def __call__(self, data: dict) -> dict:
         L = len(data["res_type"])
         

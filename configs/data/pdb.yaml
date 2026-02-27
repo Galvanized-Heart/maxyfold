@@ -1,6 +1,14 @@
 _target_: maxyfold.data.datamodules.pdb_datamodule.PDBDataModule
-data_dir: ${paths.data_dir}
-batch_size: 128 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-train_val_test_split: [55_000, 5_000, 10_000]
-num_workers: 0
-pin_memory: False
+
+lmdb_path: ${paths.lmdb_path}
+processed_dir: ${paths.pdb_processed_dir}
+
+batch_size: 16
+num_workers: 8
+pin_memory: True
+
+cropper:
+  _target_: maxyfold.data.cropping.croppers.ContiguousCropper
+  crop_size: 384
+  # pad_token_id is 0 by default
+  ligand_prob: 0.5
