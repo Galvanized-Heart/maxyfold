@@ -48,7 +48,7 @@ class ManifestCreator:
 
                 for chain in st[0]:
                     polymer = chain.get_polymer()
-                    if not polymer: # It's a non-polymer chain (e.g., just ligands)
+                    if not polymer:
                         for res in chain:
                             if res.name in self.smiles_map:
                                 entry["ligand_smiles"][f"{pdb_id_upper}_{chain.name}_{res.seqid.num}"] = self.smiles_map[res.name]

@@ -30,6 +30,7 @@ dependencies = [
     "pdbfixer-wheel>=1.11.0", # This is an unofficial fork of the pdbfixer repo for PyPI installation
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
+    "rdkit>=2025.9.5",
     "requests>=2.32.5",
     "rich>=14.2.0",
     "rootutils>=1.0.7",

@@ -1,81 +1,38 @@
-import lmdb
-import tempfile
-import subprocess
+import json
 import random
+import subprocess
+import tempfile
 from pathlib import Path
-from tqdm import tqdm
-import pandas as pd
-import shutil
-import numpy as np
+from typing import Dict, List, Set
 
-from maxyfold.data.components.tarball_reader import TarballReader 
-from maxyfold.data.constants.atom_constants import AA_3_TO_1
+import pandas as pd
+from tqdm import tqdm
 
 try:
-    import gemmi
+    from rdkit import Chem
+    from rdkit.Chem.Scaffolds import MurckoScaffold
 except ImportError:
-    raise ImportError("Gemmi is required for splitting. Please install it.")
+    raise ImportError("RDKit is required for ligand splitting. Please run 'pip install rdkit'")
 
 class PDBDataSplitter:
-    def __init__(self, raw_assemblies_dir, output_dir, mmseqs_config, splitting_config, limit: int = 0):
-        self.raw_assemblies_dir = Path(raw_assemblies_dir)
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, manifest_path: Path, output_dir: Path, mmseqs_config: Dict, splitting_config: Dict):
+        self.output_dir = output_dir
+        self.mmseqs_config = mmseqs_config
+        self.splitting_config = splitting_config
         
-        self.config = {
-            "seq_id": mmseqs_config['seq_id'],
-            "coverage": mmseqs_config['coverage'],
-            "cov_mode": mmseqs_config['cov_mode'],
-            "cluster_mode": mmseqs_config['cluster_mode'],
-            "threads": mmseqs_config.get('threads', 8),
-            "split_ratios": splitting_config['ratios'],
-            "seed": splitting_config['seed']
-        }
+        print(f"Loading manifest from {manifest_path}...")
+        with open(manifest_path, 'r') as f:
+            self.manifest = json.load(f)
 
-        self.res_map = AA_3_TO_1
-
-        self.limit = limit
-
-    def _extract_protein_sequences(self) -> dict:
-        print("Extracting protein sequences from raw files...")
-        sequences = {}
-
-        # Iterate over cif files
-        tar_files = sorted(list(self.raw_assemblies_dir.glob("assemblies_batch_*.tar.gz")))
-        cif_stream = TarballReader(tar_paths=tar_files, file_limit=self.limit)
-        for pdb_id, cif_string in tqdm(cif_stream, desc="Extracting Seqs"):            
-            try:
-                doc = gemmi.cif.read_string(cif_string)
-                block = doc.sole_block()
-                st = gemmi.make_structure_from_block(block)
-                
-                for chain in st[0]:
-                    seq_list = []
-                    polymer = chain.get_polymer()
-                    
-                    for res in polymer:
-                        code = self.res_map.get(res.name, 'X')
-                        seq_list.append(code)
-                    
-                    seq = "".join(seq_list)
-
-                    if seq and len(seq) > 20: # Filter out short peptides
-                        chain_id = f"{pdb_id.upper()}_{chain.name}"
-                        sequences[chain_id] = seq
-            except Exception:
-                continue
-        return sequences
-
-    def run_mmseqs2_clustering(self, sequences: dict, work_dir: Path) -> pd.DataFrame:
-        """Runs MMseqs2 and return DataFrame of the clusters."""
+    def _cluster_sequences(self, sequences: Dict[str, str], work_dir: Path) -> Dict[str, str]:
+        if not sequences:
+            return {}
+        
         fasta_path = work_dir / "sequences.fasta"
-        
-        print(f"Writing {len(sequences)} sequences to FASTA file...")
         with open(fasta_path, "w") as f:
-            for chain_id, seq in sequences.items():
-                f.write(f">{chain_id}\n{seq}\n")
+            for seq_id, seq in sequences.items():
+                f.write(f">{seq_id}\n{seq}\n")
         
-        print("Running MMseqs2 clustering...")
         db_path = work_dir / "DB"
         cluster_path = work_dir / "clu"
         tmp_path = work_dir / "tmp"
@@ -84,77 +41,103 @@ class PDBDataSplitter:
         cmds = [
             ["mmseqs", "createdb", str(fasta_path), str(db_path), "-v", "0"],
             ["mmseqs", "cluster", str(db_path), str(cluster_path), str(tmp_path),
-             "--min-seq-id", str(self.config['seq_id']),
-             "-c", str(self.config['coverage']),
-             "--cov-mode", str(self.config['cov_mode']),
-             "--threads", str(self.config['threads']),
-             "--cluster-mode", str(self.config['cluster_mode']),
+             "--min-seq-id", str(self.mmseqs_config['seq_id']),
+             "-c", str(self.mmseqs_config['coverage']),
+             "--cov-mode", str(self.mmseqs_config['cov_mode']),
+             "--threads", str(self.mmseqs_config.get('threads', 8)),
+             "--cluster-mode", str(self.mmseqs_config['cluster_mode']),
              "-v", "0"],
             ["mmseqs", "createtsv", str(db_path), str(db_path), str(cluster_path), str(tsv_path), "-v", "0"]
         ]
         
         for cmd in cmds:
+            subprocess.run(cmd, check=True, text=True, capture_output=True)
+        
+        df = pd.read_csv(tsv_path, sep='\t', header=None, names=['representative', 'member'])
+        return pd.Series(df.representative.values, index=df.member).to_dict()
+
+    def _cluster_ligands(self, ligands: Dict[str, str]) -> Dict[str, str]:
+        if not ligands:
+            return {}
+        
+        scaffolds = {}
+        for ligand_id, smiles in tqdm(ligands.items(), desc="Generating Ligand Scaffolds"):
             try:
-                subprocess.run(cmd, check=True, text=True, capture_output=True)
-            except subprocess.CalledProcessError as e:
-                print(f"MMseqs2 command failed: {' '.join(cmd)}")
-                print("STDERR:", e.stderr)
-                raise
-        
-        return pd.read_csv(tsv_path, sep='\t', header=None, names=['representative', 'member'])
-
-    def assign_splits(self, cluster_df: pd.DataFrame):
-        """Robust splitting logic."""
-        # Get unique PDB IDs from member chain IDs
-        cluster_df['pdb_id'] = cluster_df['member'].apply(lambda x: x.split('_')[0])
-        
-        # Group cluster
-        clusters = cluster_df.groupby('representative')['pdb_id'].apply(set).tolist()
-        
-        print(f"Found {len(clusters)} clusters. Assigning to splits with seed {self.config['seed']}...")
-        
-        # Reproducible shuffle
-        rng = random.Random(self.config['seed'])
-        rng.shuffle(clusters)
-        
-        n_clusters = len(clusters)
-        ratios = self.config['split_ratios']
-        
-        # Create splits
-        train_end = int(ratios[0] * n_clusters)
-        val_end = train_end + int(ratios[1] * n_clusters)
-        
-        train_reps = clusters[:train_end]
-        val_reps = clusters[train_end:val_end]
-        test_reps = clusters[val_end:]
-
-        train_set = set().union(*train_reps) if train_reps else set()
-        val_set = set().union(*val_reps) if val_reps else set()
-        test_set = set().union(*test_reps) if test_reps else set()
-
-        # Ensure strict separation
-        val_set -= train_set
-        test_set -= (train_set | val_set)
-
-        print(f"Final split sizes (PDB IDs): Train={len(train_set)}, Val={len(val_set)}, Test={len(test_set)}")
-        
-        for name, s in [("train", train_set), ("val", val_set), ("test", test_set)]:
-            output_file = self.output_dir / f"{name}_keys.txt"
-            with open(output_file, "w") as f:
-                for pdb_id in sorted(list(s)):
-                    f.write(f"{pdb_id}\n")
-            print(f"Wrote {len(s)} keys to {output_file}")
+                mol = Chem.MolFromSmiles(smiles)
+                if mol is None: continue
+                scaffold = MurckoScaffold.GetScaffoldForMol(mol)
+                scaffold_smiles = Chem.MolToSmiles(scaffold)
+                scaffolds[ligand_id] = scaffold_smiles if scaffold_smiles else smiles
+            except Exception:
+                continue
+        return scaffolds
 
     def create(self):
-        """Main entrypoint to create the splits."""        
-        sequences = self._extract_protein_sequences()
-        
-        if not sequences:
-            print("No protein sequences could be extracted. Cannot create splits.")
-            return
+        print("Starting advanced data splitting...")
+        protein_seqs, nucleic_seqs, ligand_smiles = {}, {}, {}
+        for entry in self.manifest.values():
+            protein_seqs.update(entry.get("protein_sequences", {}))
+            nucleic_seqs.update(entry.get("nucleic_sequences", {}))
+            ligand_smiles.update(entry.get("ligand_smiles", {}))
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            cluster_df = self.run_mmseqs2_clustering(sequences, Path(tmpdir))
-            self.assign_splits(cluster_df)
+            work_dir = Path(tmpdir)
+            print("\n--- Clustering Proteins ---")
+            protein_map = self._cluster_sequences(protein_seqs, work_dir / "prot")
+            print(f"Found {len(set(protein_map.values()))} protein clusters.")
+
+            print("\n--- Clustering Nucleic Acids ---")
+            nucleic_map = self._cluster_sequences(nucleic_seqs, work_dir / "nuc")
+            print(f"Found {len(set(nucleic_map.values()))} nucleic acid clusters.")
         
-        print(f"Splits created successfully in {self.output_dir}")
+        print("\n--- Clustering Ligands by Scaffold ---")
+        ligand_map = self._cluster_ligands(ligand_smiles)
+        print(f"Found {len(set(ligand_map.values()))} unique ligand scaffolds.")
+
+        # Build a map from each PDB ID to all its associated cluster IDs
+        pdb_to_clusters: Dict[str, Set[str]] = {pdb_id: set() for pdb_id in self.manifest}
+        for pdb_id, entry in self.manifest.items():
+            for chain_id in entry["protein_sequences"]:
+                if chain_id in protein_map:
+                    pdb_to_clusters[pdb_id].add(f"p_{protein_map[chain_id]}")
+            for chain_id in entry["nucleic_sequences"]:
+                if chain_id in nucleic_map:
+                    pdb_to_clusters[pdb_id].add(f"n_{nucleic_map[chain_id]}")
+            for ligand_id in entry["ligand_smiles"]:
+                if ligand_id in ligand_map:
+                    pdb_to_clusters[pdb_id].add(f"l_{ligand_map[ligand_id]}")
+        
+        # Get all unique cluster IDs from the entire dataset
+        all_clusters = sorted(list(set.union(*pdb_to_clusters.values())))
+        rng = random.Random(self.splitting_config['seed'])
+        rng.shuffle(all_clusters)
+        
+        # Split the list of CLUSTER IDs
+        ratios = self.splitting_config['ratios']
+        n = len(all_clusters)
+        train_end = int(ratios[0] * n)
+        val_end = train_end + int(ratios[1] * n)
+        
+        train_clusters = set(all_clusters[:train_end])
+        val_clusters = set(all_clusters[train_end:val_end])
+        test_clusters = set(all_clusters[val_end:])
+        
+        # Assign PDBs to splits with strict hierarchy: Test > Val > Train
+        train_pdbs, val_pdbs, test_pdbs = set(), set(), set()
+        for pdb_id, clusters in pdb_to_clusters.items():
+            if not clusters.isdisjoint(test_clusters):
+                test_pdbs.add(pdb_id)
+            elif not clusters.isdisjoint(val_clusters):
+                val_pdbs.add(pdb_id)
+            else:
+                train_pdbs.add(pdb_id)
+        
+        print("\n--- Final Split Sizes ---")
+        print(f"Train: {len(train_pdbs)}, Val: {len(val_pdbs)}, Test: {len(test_pdbs)}")
+        
+        for name, s in [("train", train_pdbs), ("val", val_pdbs), ("test", test_pdbs)]:
+            path = self.output_dir / f"{name}_keys.txt"
+            with open(path, "w") as f:
+                for pdb_id in sorted(list(s)):
+                    f.write(f"{pdb_id}\n")
+            print(f"Wrote {len(s)} keys to {path}")
