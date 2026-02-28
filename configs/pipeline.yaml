@@ -2,6 +2,7 @@ defaults:
   - paths: default
   - query: pdb
   - split: mmseqs2
+  - storage: lmdb
   - _self_
 
 # A dummy task name to satisfy hydra structure

@@ -8,7 +8,7 @@ import pandas as pd
 import shutil
 import numpy as np
 
-from maxyfold.data.components.tarball_reader import TarballReader
+from maxyfold.data.components.tarball_reader import TarballReader 
 from maxyfold.data.constants.atom_constants import AA_3_TO_1
 
 try:
@@ -17,44 +17,48 @@ except ImportError:
     raise ImportError("Gemmi is required for splitting. Please install it.")
 
 class PDBDataSplitter:
-    def __init__(self, lmdb_path, raw_assemblies_dir, output_dir, mmseqs_config, splitting_config, limit: int = 0):
-        self.lmdb_path = Path(lmdb_path)
+    def __init__(self, raw_assemblies_dir, output_dir, mmseqs_config, splitting_config, limit: int = 0):
         self.raw_assemblies_dir = Path(raw_assemblies_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.limit = limit
         
         self.config = {
-        "seq_id": mmseqs_config['seq_id'],
-        "coverage": mmseqs_config['coverage'],
-        "cov_mode": mmseqs_config['cov_mode'],
-        "cluster_mode": mmseqs_config['cluster_mode'],
-        "threads": mmseqs_config.get('threads', 8),
-        "split_ratios": splitting_config['ratios'],
-        "seed": splitting_config['seed']
-    }
-        
-        # Mapping from 3-letter to 1-letter AA code
+            "seq_id": mmseqs_config['seq_id'],
+            "coverage": mmseqs_config['coverage'],
+            "cov_mode": mmseqs_config['cov_mode'],
+            "cluster_mode": mmseqs_config['cluster_mode'],
+            "threads": mmseqs_config.get('threads', 8),
+            "split_ratios": splitting_config['ratios'],
+            "seed": splitting_config['seed']
+        }
+
         self.res_map = AA_3_TO_1
 
-    def _extract_protein_sequences(self, keys_to_process: set) -> dict:
+        self.limit = limit
+
+    def _extract_protein_sequences(self) -> dict:
         print("Extracting protein sequences from raw files...")
         sequences = {}
 
         # Iterate over cif files
         tar_files = sorted(list(self.raw_assemblies_dir.glob("assemblies_batch_*.tar.gz")))
-        cif_stream = TarballReader(tar_paths=tar_files)
-        for pdb_id, cif_string in tqdm(cif_stream, desc="Extracting Seqs"):
-            if pdb_id.upper() not in keys_to_process:
-                continue
-            
+        cif_stream = TarballReader(tar_paths=tar_files, file_limit=self.limit)
+        for pdb_id, cif_string in tqdm(cif_stream, desc="Extracting Seqs"):            
             try:
                 doc = gemmi.cif.read_string(cif_string)
                 block = doc.sole_block()
                 st = gemmi.make_structure_from_block(block)
                 
                 for chain in st[0]:
-                    seq = gemmi.one_letter_sequence(chain.get_polymer(), self.res_map)
+                    seq_list = []
+                    polymer = chain.get_polymer()
+                    
+                    for res in polymer:
+                        code = self.res_map.get(res.name, 'X')
+                        seq_list.append(code)
+                    
+                    seq = "".join(seq_list)
+
                     if seq and len(seq) > 20: # Filter out short peptides
                         chain_id = f"{pdb_id.upper()}_{chain.name}"
                         sequences[chain_id] = seq
@@ -124,9 +128,9 @@ class PDBDataSplitter:
         val_reps = clusters[train_end:val_end]
         test_reps = clusters[val_end:]
 
-        train_set = set().union(*train_reps)
-        val_set = set().union(*val_reps)
-        test_set = set().union(*test_reps)
+        train_set = set().union(*train_reps) if train_reps else set()
+        val_set = set().union(*val_reps) if val_reps else set()
+        test_set = set().union(*test_reps) if test_reps else set()
 
         # Ensure strict separation
         val_set -= train_set
@@ -141,23 +145,10 @@ class PDBDataSplitter:
                     f.write(f"{pdb_id}\n")
             print(f"Wrote {len(s)} keys to {output_file}")
 
-
     def create(self):
-        """Main entrypoint to create the splits."""
-        print("Starting data splitting process...")
-        env = lmdb.open(str(self.lmdb_path), readonly=True, subdir=False, lock=False)
-        with env.begin() as txn:
-            processed_keys = {key.decode('ascii').upper() for key in txn.cursor().iternext(values=False)}
-
-        if self.limit > 0:
-            print(f"Limiting splitting to first {self.limit} entries.")
-            processed_keys = set(processed_keys[:self.limit])
-        else:
-            processed_keys = set(processed_keys)
+        """Main entrypoint to create the splits."""        
+        sequences = self._extract_protein_sequences()
         
-        print(f"Found {len(processed_keys)} successfully processed entries in LMDB.")
-        
-        sequences = self._extract_protein_sequences(processed_keys)
         if not sequences:
             print("No protein sequences could be extracted. Cannot create splits.")
             return

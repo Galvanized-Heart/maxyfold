@@ -1,0 +1,2 @@
+_target_: maxyfold.data.storage.lmdb.LMDBBackend
+path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb

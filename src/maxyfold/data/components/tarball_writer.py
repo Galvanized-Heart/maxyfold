@@ -1,6 +1,8 @@
 import tarfile
 from pathlib import Path
 
+
+
 class TarballWriter:
     """
     A context manager class that writes files to a .tar.gz archive.
@@ -29,7 +31,6 @@ class TarballWriter:
         """
         filepath = Path(filepath)
         if filepath.exists():
-            # Use provided arcname, otherwise use the file's base name
             self.tar.add(filepath, arcname=arcname or filepath.name)
             
             if delete_original:

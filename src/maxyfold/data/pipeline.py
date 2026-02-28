@@ -2,14 +2,16 @@ import os
 import math
 from pathlib import Path
 from typing import Dict, Any
+import hydra
 
 
 
 class DataPipelineManager:
     """Orchestrates the downloading, compressing, and processing of datasets."""
-    def __init__(self, paths_cfg, query_cfg=None):
+    def __init__(self, paths_cfg, query_cfg=None, storage_cfg=None):
         self.paths = paths_cfg
         self.query_cfg = query_cfg
+        self.storage_cfg = storage_cfg
         
         # Resolve config paths
         self.raw_dir = Path(self.paths.pdb_raw_dir)
@@ -21,6 +23,12 @@ class DataPipelineManager:
         self.assemblies_dir.mkdir(parents=True, exist_ok=True)
         self.ccd_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_backend(self):
+        """Instantiates the backend defined in the config."""
+        if not self.storage_cfg:
+            raise ValueError("Storage configuration is missing.")
+        return hydra.utils.instantiate(self.storage_cfg)
 
     def download_dataset(self, ids=True, ccd=True, assemblies=True, batch_size=20000, limit=0):
         """Runs the requested download steps."""
@@ -95,33 +103,26 @@ class DataPipelineManager:
             
             print(f"Batch {i+1} complete. Archived and removed {removed_count} uncompressed files.")
 
-    def process_to_lmdb(self, file_limit=0):
-        """Converts raw tarballs to ML-ready LMDB."""
+    def process(self, file_limit=0):
         from tqdm import tqdm
         from maxyfold.data.processing.pdb_processor import PDBProcessor
-        from maxyfold.data.storage.lmdb_io import LMDBWriter
         from maxyfold.data.components.tarball_reader import TarballReader
 
-        lmdb_path = Path(self.paths.lmdb_path)
-        ccd_atoms_path = self.paths.ccd_atoms_map_path
+        backend = self.get_backend()
         
         tar_files = sorted(list(self.assemblies_dir.glob("assemblies_batch_*.tar.gz")))
         if not tar_files:
-            raise FileNotFoundError("No tarballs found in raw directory!")
+            raise FileNotFoundError("No raw tarballs found to process!")
 
-        print("Initializing PDB Processor...")
-        processor = PDBProcessor(ligand_map_path=str(ccd_atoms_path))
+        processor = PDBProcessor(ligand_map_path=str(self.paths.ccd_atoms_map_path))
         cif_stream = TarballReader(tar_paths=tar_files, file_limit=file_limit)
-
-        total_complexes = 0
-        total_errors = 0
-        pbar_total = file_limit if file_limit > 0 else None
         
-        print(f"Writing ALL-ATOM dataset to {lmdb_path}...")
-        with LMDBWriter(str(lmdb_path)) as writer:
-            for pdb_id, cif_string in tqdm(cif_stream, total=pbar_total, desc="Processing PDBs"):
+        total_complexes, total_errors = 0, 0
+        
+        print(f"Writing data using {backend.__class__.__name__}...")
+        with backend.get_writer() as writer:
+            for pdb_id, cif_string in tqdm(cif_stream, desc="Processing PDBs"):
                 result = processor.parse_cif_string(cif_string, pdb_id)
-                
                 if result:
                     writer.write(pdb_id, result)
                     total_complexes += 1
@@ -129,19 +130,17 @@ class DataPipelineManager:
                         writer.commit()
                 else:
                     total_errors += 1
-
         return total_complexes, total_errors
 
     def create_splits(self, mmseqs_config: Dict, splitting_config: Dict, limit: int = 0):
-        """Orchestrates the data splitting process."""
         from maxyfold.data.splits.pdb_splitter import PDBDataSplitter
 
         splitter = PDBDataSplitter(
-            lmdb_path=self.paths.lmdb_path,
             raw_assemblies_dir=self.assemblies_dir,
             output_dir=self.processed_dir,
             mmseqs_config=mmseqs_config,
             splitting_config=splitting_config,
             limit=limit,
         )
+        
         splitter.create()

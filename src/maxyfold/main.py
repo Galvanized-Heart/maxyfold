@@ -7,6 +7,9 @@ import shutil
 
 # Load root path
 root = rootutils.find_root(indicator=".project-root")
+# This root variable must exist for config/paths/default.yaml to work correctly.
+# Run `export PROJECT_ROOT=$(pwd)` to set to current dir.
+# Verify PROJECT_ROOT was updated by running `echo $PROJECT_ROOT`.
 
 # Load config
 GlobalHydra.instance().clear()
@@ -88,10 +91,10 @@ def process(file_limit):
     click.echo("Processing raw PDB files...")
     from maxyfold.data.pipeline import DataPipelineManager
 
-    manager = DataPipelineManager(paths_cfg=cfg.paths)
+    manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
 
     try:
-        total_complexes, total_errors = manager.process_to_lmdb(file_limit=file_limit)
+        total_complexes, total_errors = manager.process(file_limit=file_limit)
         click.echo(click.style(f"\nProcessing Complete!", fg="green", bold=True))
         click.echo(f"Total Complexes Saved: {total_complexes}")
         click.echo(f"Skipped/Errors:        {total_errors}")
@@ -109,12 +112,12 @@ def process(file_limit):
 @click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
 def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
     """Clusters processed PDBs by sequence identity and creates train/val/test splits."""
-    click.echo("Creating data splits using MMseqs2...")
+    click.echo("Starting up splitting process...")
     from maxyfold.data.pipeline import DataPipelineManager
 
     # Input validation
     try:
-        ratios = list(cfg.split.ratios)
+        ratios = list(cfg.split.splitting.ratios)
         total_sum = sum(ratios)
         if len(ratios) != 3 or total_sum != 1.0:
             click.echo(click.style(f"Config Error: Split ratios in pipeline.yaml must sum to 1.0", fg="red"))
@@ -124,7 +127,16 @@ def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
     
     # Check for mmseqs2
     if not shutil.which("mmseqs"):
-        click.echo(click.style("Error: 'mmseqs' command not found in PATH.\n\nTry running:\n  sudo apt-get update\n  sudo apt-get install mmseqs2", fg="red"))
+        click.echo(click.style("""
+        Error: 'mmseqs' command not found in PATH.
+
+        Try running:
+            wget https://mmseqs.com/latest/mmseqs-linux-avx2.tar.gz
+            tar xvfz mmseqs-linux-avx2.tar.gz
+            export PATH=$(pwd)/mmseqs/bin/:$PATH
+            mv mmseqs/bin/mmseqs ~/.local/bin/
+            rm -rf mmseqs mmseqs-linux-avx2.tar.gz
+        """, fg="red"))
         return
 
     # Copy configs
@@ -140,7 +152,7 @@ def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
     with open_dict(splitting_config):
         splitting_config.seed = seed
 
-    manager = DataPipelineManager(paths_cfg=cfg.paths)
+    manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
 
     try:
         manager.create_splits(mmseqs_config, splitting_config, limit=file_limit)
