@@ -10,9 +10,8 @@ try:
 except ImportError:
     raise ImportError("Gemmi is required for this script.")
 
-class ManifestCreator:
-    def __init__(self, valid_keys: set, raw_assemblies_dir: Path, ccd_smiles_path: Path):
-        self.valid_keys = valid_keys
+class PDBManifest:
+    def __init__(self, raw_assemblies_dir: Path, ccd_smiles_path: Path, limit: int = 0):
         self.raw_assemblies_dir = raw_assemblies_dir
         with open(ccd_smiles_path, 'r') as f:
             self.smiles_map = json.load(f)
@@ -20,20 +19,17 @@ class ManifestCreator:
         self.protein_res = set(AA_3_TO_1.keys())
         self.nucleic_res = {'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U'}
 
+        self.limit=limit
+
     def create(self) -> dict:
         manifest = {}
         tar_files = sorted(list(self.raw_assemblies_dir.glob("assemblies_batch_*.tar.gz")))
-        cif_stream = TarballReader(tar_paths=tar_files)
+        cif_stream = TarballReader(tar_paths=tar_files, file_limit=self.limit)
         
-        remaining_keys = self.valid_keys.copy()
         pbar = tqdm(cif_stream, desc="Creating Manifest")
 
         for pdb_id, cif_string in pbar:
             pdb_id_upper = pdb_id.upper()
-            if pdb_id_upper not in remaining_keys:
-                continue
-            
-            pbar.set_postfix({"found": len(manifest), "remaining": len(remaining_keys)})
             
             entry = {
                 "protein_sequences": {},
@@ -69,11 +65,7 @@ class ManifestCreator:
                             entry["nucleic_sequences"][chain_id] = seq
                 
                 manifest[pdb_id_upper] = entry
-                remaining_keys.remove(pdb_id_upper)
-
-                if not remaining_keys:
-                    pbar.write("Found all keys. Finalizing manifest.")
-                    break
+                
             except Exception:
                 continue
         

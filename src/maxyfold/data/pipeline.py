@@ -1,3 +1,4 @@
+import json
 import os
 import math
 from pathlib import Path
@@ -132,15 +133,37 @@ class DataPipelineManager:
                     total_errors += 1
         return total_complexes, total_errors
 
-    def create_splits(self, mmseqs_config: Dict, splitting_config: Dict, limit: int = 0):
+    def create_manifest(self, limit: int = 0):
+        """Scans the dataset and creates a JSON manifest of its contents."""
+        from maxyfold.data.splits.pdb_manifest import PDBManifest
+        
+        backend = self.get_backend().__class__.__name__
+
+        creator = PDBManifest(
+            raw_assemblies_dir=self.assemblies_dir,
+            ccd_smiles_path=self.paths.ccd_smiles_map_path,
+            limit=limit
+        )
+        
+        manifest_data = creator.create()
+        
+        manifest_path = self.processed_dir / "manifest.json" # Need to make this DRY
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest_data, f, indent=2)
+        print(f"Manifest saved to {manifest_path}")
+
+    def create_splits(self, mmseqs_config: Dict, splitting_config: Dict):
         from maxyfold.data.splits.pdb_splitter import PDBDataSplitter
 
+        manifest_path = self.processed_dir / "manifest.json" # Need to make this DRY
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found at {manifest_path}. Run 'maxyfold manifest' first.")
+
         splitter = PDBDataSplitter(
-            raw_assemblies_dir=self.assemblies_dir,
+            manifest_path=manifest_path,
             output_dir=self.processed_dir,
             mmseqs_config=mmseqs_config,
             splitting_config=splitting_config,
-            limit=limit,
         )
         
         splitter.create()

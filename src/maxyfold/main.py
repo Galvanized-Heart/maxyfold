@@ -102,6 +102,22 @@ def process(file_limit):
         click.echo(click.style(f"\nPipeline failed: {str(e)}", fg="red", bold=True))
 
 
+@cli.command()
+@click.option("--file-limit", default=0, help="Limit number of PDBs to include in the manifest (for testing).")
+def manifest(file_limit):
+    """Scans the dataset to create a manifest of its contents (sequences, ligands)."""
+    click.echo("Creating dataset manifest...")
+    from maxyfold.data.pipeline import DataPipelineManager
+    
+    manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
+    try:
+        manager.create_manifest(limit=file_limit)
+        click.echo(click.style("\nManifest created successfully!", fg="green", bold=True))
+    except Exception as e:
+        click.echo(click.style(f"\nManifest creation failed: {str(e)}", fg="red", bold=True))
+
+
+
 
 @cli.command()
 @click.option("--seq-id", default=cfg.split.mmseqs.seq_id, type=float, help="MMseqs2: Min sequence identity.")
@@ -109,8 +125,7 @@ def process(file_limit):
 @click.option("--cov-mode", default=cfg.split.mmseqs.cov_mode, type=int, help="MMseqs2: Coverage mode.")
 @click.option("--cluster-mode", default=cfg.split.mmseqs.cluster_mode, type=int, help="MMseqs2: Clustering algorithm.")
 @click.option("--seed", default=cfg.split.splitting.seed, type=int, help="Random seed for splitting.")
-@click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
-def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
+def split(seq_id, coverage, cov_mode, cluster_mode, seed):
     """Clusters processed PDBs by sequence identity and creates train/val/test splits."""
     click.echo("Starting up splitting process...")
     from maxyfold.data.pipeline import DataPipelineManager
@@ -152,10 +167,10 @@ def split(seq_id, coverage, cov_mode, cluster_mode, seed, file_limit):
     with open_dict(splitting_config):
         splitting_config.seed = seed
 
-    manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
+    manager = DataPipelineManager(paths_cfg=cfg.paths)
 
     try:
-        manager.create_splits(mmseqs_config, splitting_config, limit=file_limit)
+        manager.create_splits(mmseqs_config, splitting_config)
         click.echo(click.style("\nData splits created successfully!", fg="green", bold=True))
     except Exception as e:
         click.echo(click.style(f"\nSplitting failed: {str(e)}", fg="red", bold=True))

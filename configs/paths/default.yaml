@@ -23,4 +23,5 @@ pdb_raw_dir: ${paths.data_dir}/pdb/raw
 pdb_processed_dir: ${paths.data_dir}/pdb/processed
 ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
 ccd_atoms_map_path: ${paths.pdb_processed_dir}/ccd_atoms.json
+ccd_smiles_map_path: ${paths.pdb_processed_dir}/ccd_smiles.json
 lmdb_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb

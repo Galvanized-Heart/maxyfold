@@ -28,6 +28,8 @@ class PDBDataSplitter:
         if not sequences:
             return {}
         
+        work_dir.mkdir(parents=True, exist_ok=True)
+
         fasta_path = work_dir / "sequences.fasta"
         with open(fasta_path, "w") as f:
             for seq_id, seq in sequences.items():
@@ -82,15 +84,15 @@ class PDBDataSplitter:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
-            print("\n--- Clustering Proteins ---")
+            print("\nClustering Proteins...")
             protein_map = self._cluster_sequences(protein_seqs, work_dir / "prot")
             print(f"Found {len(set(protein_map.values()))} protein clusters.")
 
-            print("\n--- Clustering Nucleic Acids ---")
+            print("\nClustering Nucleic Acids...")
             nucleic_map = self._cluster_sequences(nucleic_seqs, work_dir / "nuc")
             print(f"Found {len(set(nucleic_map.values()))} nucleic acid clusters.")
         
-        print("\n--- Clustering Ligands by Scaffold ---")
+        print("\nClustering Ligands by Scaffold...")
         ligand_map = self._cluster_ligands(ligand_smiles)
         print(f"Found {len(set(ligand_map.values()))} unique ligand scaffolds.")
 
