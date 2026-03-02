@@ -102,6 +102,7 @@ def process(file_limit):
         click.echo(click.style(f"\nPipeline failed: {str(e)}", fg="red", bold=True))
 
 
+
 @cli.command()
 @click.option("--file-limit", default=0, help="Limit number of PDBs to include in the manifest (for testing).")
 def manifest(file_limit):
@@ -115,7 +116,6 @@ def manifest(file_limit):
         click.echo(click.style("\nManifest created successfully!", fg="green", bold=True))
     except Exception as e:
         click.echo(click.style(f"\nManifest creation failed: {str(e)}", fg="red", bold=True))
-
 
 
 

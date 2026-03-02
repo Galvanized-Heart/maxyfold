@@ -20,8 +20,15 @@ work_dir: ${hydra:runtime.cwd}
 
 # paths specific to pdb data
 pdb_raw_dir: ${paths.data_dir}/pdb/raw
-pdb_processed_dir: ${paths.data_dir}/pdb/processed
+assemblies_path: ${paths.pdb_raw_dir}/assemblies 
 ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
+ids_path: ${paths.pdb_raw_dir}/pdb_ids.txt
+
+pdb_processed_dir: ${paths.data_dir}/pdb/processed
 ccd_atoms_map_path: ${paths.pdb_processed_dir}/ccd_atoms.json
 ccd_smiles_map_path: ${paths.pdb_processed_dir}/ccd_smiles.json
+manifest_path: ${paths.pdb_processed_dir}/manifest.json
 lmdb_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb
+test_set_path: ${paths.pdb_processed_dir}/test_ids.txt
+train_set_path: ${paths.pdb_processed_dir}/train_ids.txt
+val_set_path: ${paths.pdb_processed_dir}/val_ids.txt

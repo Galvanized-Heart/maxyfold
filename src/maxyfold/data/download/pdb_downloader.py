@@ -160,13 +160,12 @@ class PDBDownloader:
             pbar.update(1)
             return url, f"Failed ({type(e).__name__})"
 
-    def download_ccd(self, output_dir: Path):
+    def download_ccd(self, output_file: Path):
         """Downloads the Chemical Component Dictionary."""
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = Path(output_dir)
+        output_file.mkdir(parents=True, exist_ok=True)
         
         url = "https://files.rcsb.org/pub/pdb/data/monomers/components.cif.gz"
-        file_path = output_dir / "components.cif.gz"
 
         print(f"Starting CCD download from: {url}")
         
@@ -175,14 +174,14 @@ class PDBDownloader:
             response.raise_for_status()
             
             total_size = int(response.headers.get('content-length', 0))
-            with open(file_path, "wb") as f, tqdm(
+            with open(output_file, "wb") as f, tqdm(
                 desc="Downloading CCD", total=total_size, unit='iB', unit_scale=True
             ) as pbar:
                 for chunk in response.iter_content(chunk_size=8192):
                     pbar.update(len(chunk))
                     f.write(chunk)
             
-            print(f"\nSuccessfully downloaded CCD to {file_path}")
+            print(f"\nSuccessfully downloaded CCD to {output_file}")
 
         except requests.exceptions.RequestException as e:
             print(f"\nFAILED! An error occurred during CCD download: {e}")

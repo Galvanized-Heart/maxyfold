@@ -15,14 +15,21 @@ except ImportError:
     raise ImportError("RDKit is required for ligand splitting. Please run 'pip install rdkit'")
 
 class PDBDataSplitter:
-    def __init__(self, manifest_path: Path, output_dir: Path, mmseqs_config: Dict, splitting_config: Dict):
-        self.output_dir = output_dir
+    def __init__(self, paths_config: Dict, mmseqs_config: Dict, splitting_config: Dict):
+        self.paths = paths_config
         self.mmseqs_config = mmseqs_config
         self.splitting_config = splitting_config
         
-        print(f"Loading manifest from {manifest_path}...")
+        self.manifest_path = Path(self.paths.manifest_path)
+        print(f"Loading manifest from {self.manifest_path}...")
         with open(manifest_path, 'r') as f:
             self.manifest = json.load(f)
+
+        self.split_paths = {
+            "train": Path(self.paths.train_set_path),
+            "val": Path(self.paths.val_set_path),
+            "test": Path(self.paths.test_set_path)
+        }
 
     def _cluster_sequences(self, sequences: Dict[str, str], work_dir: Path) -> Dict[str, str]:
         if not sequences:
@@ -134,11 +141,11 @@ class PDBDataSplitter:
             else:
                 train_pdbs.add(pdb_id)
         
-        print("\n--- Final Split Sizes ---")
+        print("\nFinal Split Sizes:")
         print(f"Train: {len(train_pdbs)}, Val: {len(val_pdbs)}, Test: {len(test_pdbs)}")
         
         for name, s in [("train", train_pdbs), ("val", val_pdbs), ("test", test_pdbs)]:
-            path = self.output_dir / f"{name}_keys.txt"
+            path = self.split_paths[name]
             with open(path, "w") as f:
                 for pdb_id in sorted(list(s)):
                     f.write(f"{pdb_id}\n")

@@ -15,14 +15,15 @@ class DataPipelineManager:
         self.storage_cfg = storage_cfg
         
         # Resolve config paths
-        self.raw_dir = Path(self.paths.pdb_raw_dir)
+        self.assemblies_dir = Path(self.paths.assemblies_path)
+        self.ccd_path = Path(self.paths.ccd_path)
+        self.ids_path = Path(self.paths.ids_path)
+        self.manifest_path = Path(self.paths.manifest_path)
         self.processed_dir = Path(self.paths.pdb_processed_dir)
-        self.assemblies_dir = self.raw_dir / "assemblies"
-        self.ccd_dir = self.raw_dir / "ccd"
         
-        # Ensure directories exist
+        # Ensure parent directories exist
         self.assemblies_dir.mkdir(parents=True, exist_ok=True)
-        self.ccd_dir.mkdir(parents=True, exist_ok=True)
+        self.ccd_path.parent.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
 
     def get_backend(self):
@@ -38,10 +39,10 @@ class DataPipelineManager:
         downloader = PDBDownloader(query_cfg=self.query_cfg)
         
         if ids:
-            downloader.fetch_filtered_ids(output_file=self.raw_dir / "pdb_ids.txt")
+            downloader.fetch_filtered_ids(output_file=self.ids_path)
             
         if ccd:
-            downloader.download_ccd(output_dir=str(self.ccd_dir))
+            downloader.download_ccd(output_dir=self.ccd_dir)
             
         if assemblies:
             self._download_and_batch_assemblies(downloader, batch_size, limit)
@@ -51,11 +52,10 @@ class DataPipelineManager:
         import asyncio
         from maxyfold.data.components.tarball_writer import TarballWriter
 
-        id_file_path = self.raw_dir / "pdb_ids.txt"
-        if not id_file_path.exists():
-            raise FileNotFoundError(f"PDB ID list not found at {id_file_path}. Run with '--ids' first.")
+        if not self.ids_path.exists():
+            raise FileNotFoundError(f"PDB ID list not found at {self.ids_path}. Run with '--ids' first.")
 
-        with open(id_file_path, "r") as f:
+        with open(self.ids_path, "r") as f:
             all_pdb_ids = [line.strip().upper() for line in f if line.strip()]
 
         if limit > 0:
@@ -147,21 +147,18 @@ class DataPipelineManager:
         
         manifest_data = creator.create()
         
-        manifest_path = self.processed_dir / "manifest.json" # Need to make this DRY
-        with open(manifest_path, 'w') as f:
+        with open(self.manifest_path, 'w') as f:
             json.dump(manifest_data, f, indent=2)
-        print(f"Manifest saved to {manifest_path}")
+        print(f"Manifest saved to {self.manifest_path}")
 
     def create_splits(self, mmseqs_config: Dict, splitting_config: Dict):
         from maxyfold.data.splits.pdb_splitter import PDBDataSplitter
 
-        manifest_path = self.processed_dir / "manifest.json" # Need to make this DRY
-        if not manifest_path.exists():
-            raise FileNotFoundError(f"Manifest not found at {manifest_path}. Run 'maxyfold manifest' first.")
+        if not self.manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found at {self.manifest_path}. Run 'maxyfold manifest' first.")
 
         splitter = PDBDataSplitter(
-            manifest_path=manifest_path,
-            output_dir=self.processed_dir,
+            paths_config=self.paths,
             mmseqs_config=mmseqs_config,
             splitting_config=splitting_config,
         )
