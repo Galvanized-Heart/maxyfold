@@ -1,0 +1,22 @@
+defaults:
+  - default
+
+pdb_data_dir: ${paths.data_dir}/pdb
+
+# Raw data paths
+pdb_raw_dir: ${paths.pdb_data_dir}raw
+assemblies_path: ${paths.pdb_raw_dir}/assemblies 
+ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
+ids_path: ${paths.pdb_raw_dir}/pdb_ids.txt
+
+# Processed data paths
+pdb_processed_dir: ${paths.pdb_data_dir}/processed
+ccd_atoms_map_path: ${paths.pdb_processed_dir}/ccd_atoms.json
+ccd_smiles_map_path: ${paths.pdb_processed_dir}/ccd_smiles.json
+manifest_path: ${paths.pdb_processed_dir}/manifest.json
+dataset_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb
+
+# Split file paths
+train_keys_path: ${paths.pdb_processed_dir}/train_keys.txt
+val_keys_path: ${paths.pdb_processed_dir}/val_keys.txt
+test_keys_path: ${paths.pdb_processed_dir}/test_keys.txt

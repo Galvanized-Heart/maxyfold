@@ -4,22 +4,23 @@ from pathlib import Path
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
-from maxyfold.data.components.lmdb_backend import LMDBBackend
-from maxyfold.data.datasets.pdb_dataset import PDBDataset
-from maxyfold.data.cropping.croppers import BaseCropper
+from maxyfold.data import DataBackendBackend, BaseCropper, PDBDataset
+
+
 
 class PDBDataModule(LightningDataModule):
     def __init__(
         self,
-        lmdb_path: str,
+        bakcend: DataBackend,
         processed_dir: str,
-        batch_size: int = 32,
-        num_workers: int = 4,
-        pin_memory: bool = True,
+        batch_size: int,
+        num_workers: int,
+        pin_memory: bool,
         cropper: BaseCropper = None,
     ):
         super().__init__()
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters(logger=False, ignore=["backend", "cropper"])
+        self.backend = backend
         self.cropper = cropper
 
         # Instantiate datasets
@@ -27,30 +28,30 @@ class PDBDataModule(LightningDataModule):
         self.data_val: Optional[PDBDataset] = None
         self.data_test: Optional[PDBDataset] = None
 
-    def _load_keys(self, split: str) -> list[bytes]:
-        """Loads the PDB ID keys from a .txt file for a given split."""
-        keys_path = Path(self.hparams.processed_dir) / f"{split}_keys.txt"
-
-        if not keys_path.exists():
-            raise FileNotFoundError(f"Split file not found: {keys_path}. Run `create_splits.py` first.")
-        
-        with open(keys_path, 'r') as f:
-            # Encode LMDB keys
-            keys = [line.strip().encode('ascii') for line in f if line.strip()]
-        return keys
+    def _read_keys(self, file_path: str) -> list[str]:
+        """Helper to read and clean keys from a text file."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Key file not found at {path}. Have you run 'maxyfold split'?")
+        with open(path, 'r') as f:
+            # We enforce uppercase to match how keys are stored in LMDB
+            return [line.strip().upper() for line in f if line.strip()]
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: self.data_train, self.data_val, self.data_test."""
         if not self.data_train and not self.data_val and not self.data_test:
-            # Load keys for each split
-            train_keys = self._load_keys("train")
-            val_keys = self._load_keys("val")
-            test_keys = self._load_keys("test")
+            
+            print(f"Loading data splits for {self.backend.__class__.__name__}...")
+            
+            # Read keys
+            train_keys = self._read_keys(self.hparams.train_keys_path)
+            val_keys = self._read_keys(self.hparams.val_keys_path)
+            test_keys = self._read_keys(self.hparams.test_keys_path)
 
             # Create dedicated backend for each split
-            train_backend = LMDBBackend(path=self.hparams.lmdb_path, keys=train_keys)
-            val_backend = LMDBBackend(path=self.hparams.lmdb_path, keys=val_keys)
-            test_backend = LMDBBackend(path=self.hparams.lmdb_path, keys=test_keys)
+            train_backend = self.backend.__class__(path=self.backend.path, keys=train_keys)
+            val_backend = self.backend.__class__(path=self.backend.path, keys=val_keys)
+            test_backend = self.backend.__class__(path=self.backend.path, keys=test_keys)
             
             # Instantiate datasets
             self.data_train = PDBDataset(backend=train_backend, cropper=self.cropper)
@@ -66,6 +67,7 @@ class PDBDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
+            drop_last=True,
         )
 
     def val_dataloader(self):
@@ -75,6 +77,7 @@ class PDBDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            drop_last=False,
         )
 
     def test_dataloader(self):
@@ -84,4 +87,5 @@ class PDBDataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
+            drop_last=False,
         )

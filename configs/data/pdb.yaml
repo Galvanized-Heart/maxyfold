@@ -1,12 +1,22 @@
+defaults:
+  - /storage: lmdb
+
 _target_: maxyfold.data.datamodules.pdb_datamodule.PDBDataModule
 
-lmdb_path: ${paths.lmdb_path}
-processed_dir: ${paths.pdb_processed_dir}
+# DataBackend
+backend: ${storage}
 
+# Split paths
+train_keys_path: ${paths.train_keys_path}
+val_keys_path: ${paths.val_keys_path}
+test_keys_path: ${paths.test_keys_path}
+
+# DataLoader params
 batch_size: 16
 num_workers: 8
 pin_memory: True
 
+# Cropper params
 cropper:
   _target_: maxyfold.data.cropping.croppers.ContiguousCropper
   crop_size: 384

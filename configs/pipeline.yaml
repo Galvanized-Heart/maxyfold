@@ -1,5 +1,5 @@
 defaults:
-  - paths: default
+  - paths: pdb
   - query: pdb
   - split: mmseqs2
   - storage: lmdb
