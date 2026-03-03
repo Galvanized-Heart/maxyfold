@@ -22,7 +22,7 @@ class PDBDataSplitter:
         
         self.manifest_path = Path(self.paths.manifest_path)
         print(f"Loading manifest from {self.manifest_path}...")
-        with open(manifest_path, 'r') as f:
+        with open(self.manifest_path, 'r') as f:
             self.manifest = json.load(f)
 
         self.split_paths = {
@@ -87,7 +87,8 @@ class PDBDataSplitter:
         for entry in self.manifest.values():
             protein_seqs.update(entry.get("protein_sequences", {}))
             nucleic_seqs.update(entry.get("nucleic_sequences", {}))
-            ligand_smiles.update(entry.get("ligand_smiles", {}))
+            for lig_key, lig_data in entry.get("ligands", {}).items():
+                ligand_smiles[lig_key] = lig_data["smiles"]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
@@ -103,7 +104,7 @@ class PDBDataSplitter:
         ligand_map = self._cluster_ligands(ligand_smiles)
         print(f"Found {len(set(ligand_map.values()))} unique ligand scaffolds.")
 
-        # Build a map from each PDB ID to all its associated cluster IDs
+        # Build map from each PDB ID to all associated cluster IDs
         pdb_to_clusters: Dict[str, Set[str]] = {pdb_id: set() for pdb_id in self.manifest}
         for pdb_id, entry in self.manifest.items():
             for chain_id in entry["protein_sequences"]:
@@ -116,12 +117,12 @@ class PDBDataSplitter:
                 if ligand_id in ligand_map:
                     pdb_to_clusters[pdb_id].add(f"l_{ligand_map[ligand_id]}")
         
-        # Get all unique cluster IDs from the entire dataset
+        # Get unique cluster IDs from entire dataset
         all_clusters = sorted(list(set.union(*pdb_to_clusters.values())))
         rng = random.Random(self.splitting_config['seed'])
         rng.shuffle(all_clusters)
         
-        # Split the list of CLUSTER IDs
+        # Split list of cluster IDs
         ratios = self.splitting_config['ratios']
         n = len(all_clusters)
         train_end = int(ratios[0] * n)
@@ -131,7 +132,7 @@ class PDBDataSplitter:
         val_clusters = set(all_clusters[train_end:val_end])
         test_clusters = set(all_clusters[val_end:])
         
-        # Assign PDBs to splits with strict hierarchy: Test > Val > Train
+        # Assign PDBs to splits
         train_pdbs, val_pdbs, test_pdbs = set(), set(), set()
         for pdb_id, clusters in pdb_to_clusters.items():
             if not clusters.isdisjoint(test_clusters):

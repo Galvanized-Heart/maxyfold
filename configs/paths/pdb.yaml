@@ -4,7 +4,7 @@ defaults:
 pdb_data_dir: ${paths.data_dir}/pdb
 
 # Raw data paths
-pdb_raw_dir: ${paths.pdb_data_dir}raw
+pdb_raw_dir: ${paths.pdb_data_dir}/raw
 assemblies_path: ${paths.pdb_raw_dir}/assemblies 
 ccd_path: ${paths.pdb_raw_dir}/ccd/components.cif.gz
 ids_path: ${paths.pdb_raw_dir}/pdb_ids.txt
@@ -17,6 +17,6 @@ manifest_path: ${paths.pdb_processed_dir}/manifest.json
 dataset_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb
 
 # Split file paths
-train_keys_path: ${paths.pdb_processed_dir}/train_keys.txt
-val_keys_path: ${paths.pdb_processed_dir}/val_keys.txt
-test_keys_path: ${paths.pdb_processed_dir}/test_keys.txt
+train_set_path: ${paths.pdb_processed_dir}/train_keys.txt
+val_set_path: ${paths.pdb_processed_dir}/val_keys.txt
+test_set_path: ${paths.pdb_processed_dir}/test_keys.txt

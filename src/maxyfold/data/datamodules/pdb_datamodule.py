@@ -44,9 +44,9 @@ class PDBDataModule(LightningDataModule):
             print(f"Loading data splits for {self.backend.__class__.__name__}...")
             
             # Read keys
-            train_keys = self._read_keys(self.hparams.train_keys_path)
-            val_keys = self._read_keys(self.hparams.val_keys_path)
-            test_keys = self._read_keys(self.hparams.test_keys_path)
+            train_keys = self._read_keys(self.hparams.train_set_path)
+            val_keys = self._read_keys(self.hparams.val_set_path)
+            test_keys = self._read_keys(self.hparams.test_set_path)
 
             # Create dedicated backend for each split
             train_backend = self.backend.__class__(path=self.backend.path, keys=train_keys)

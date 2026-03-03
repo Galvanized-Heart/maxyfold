@@ -13,7 +13,7 @@ test_keys_path: ${paths.test_keys_path}
 
 # DataLoader params
 batch_size: 16
-num_workers: 8
+num_workers: 4
 pin_memory: True
 
 # Cropper params
