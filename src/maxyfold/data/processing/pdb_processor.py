@@ -12,7 +12,7 @@ from maxyfold.data.constants import (
 )
 
 class PDBProcessor:
-    def __init__(self, ligand_map_path="data/pdb/processed/ccd_atoms.json"):
+    def __init__(self, ligand_map_path: Path):
         self.res_lookups = {}
         for res, atoms in ATOM_MAPS.items():
             self.res_lookups[res] = {name: i for i, name in enumerate(atoms)}
@@ -163,8 +163,8 @@ class PDBProcessor:
             
             for atom in res:
                 aname = atom.name
-                if "'" in aname: 
-                    aname = aname.replace("'", "'")
+                if "*" in aname:
+                    aname = aname.replace("*", "'")
                 if aname == "O1P": 
                     aname = "OP1"
                 if aname == "O2P": 

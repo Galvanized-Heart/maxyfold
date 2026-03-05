@@ -1,8 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 
-from maxyfold.data.components.backend import DataBackend
-from maxyfold.data.cropping.croppers import BaseCropper
+from maxyfold.data import DataBackend, BaseCropper
 
 
 
