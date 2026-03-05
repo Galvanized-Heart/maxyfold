@@ -11,6 +11,8 @@ from tqdm import tqdm
 try:
     from rdkit import Chem
     from rdkit.Chem.Scaffolds import MurckoScaffold
+    from rdkit import RDLogger
+    RDLogger.DisableLog('rdApp.*')
 except ImportError:
     raise ImportError("RDKit is required for ligand splitting. Please run 'pip install rdkit'")
 
@@ -70,7 +72,7 @@ class PDBDataSplitter:
             return {}
         
         scaffolds = {}
-        for ligand_id, smiles in ligands.items():
+        for ligand_id, smiles in tqdm(ligands.items(), desc="Generating Ligand Scaffolds"):
             try:
                 # Clean the SMILES directional bonds (i.e. "|")
                 clean_smiles = smiles.replace("|", "")
