@@ -34,7 +34,7 @@ class PDBDataModule(LightningDataModule):
         if not path.exists():
             raise FileNotFoundError(f"Key file not found at {path}. Have you run 'maxyfold split'?")
         with open(path, 'r') as f:
-            # We enforce uppercase to match how keys are stored in LMDB
+            # Enforce uppercase to match how keys are stored in backend
             return [line.strip().upper() for line in f if line.strip()]
 
     def setup(self, stage: Optional[str] = None) -> None:
@@ -43,7 +43,7 @@ class PDBDataModule(LightningDataModule):
             
             print(f"Loading data splits for {self.backend.__class__.__name__}...")
             
-            # Read keys
+            # Read PDB ID keys for each split
             train_keys = self._read_keys(self.hparams.train_set_path)
             val_keys = self._read_keys(self.hparams.val_set_path)
             test_keys = self._read_keys(self.hparams.test_set_path)

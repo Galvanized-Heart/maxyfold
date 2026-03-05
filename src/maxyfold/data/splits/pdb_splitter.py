@@ -70,26 +70,42 @@ class PDBDataSplitter:
             return {}
         
         scaffolds = {}
-        for ligand_id, smiles in tqdm(ligands.items(), desc="Generating Ligand Scaffolds"):
+        for ligand_id, smiles in ligands.items():
             try:
-                mol = Chem.MolFromSmiles(smiles)
-                if mol is None: continue
+                # Clean the SMILES directional bonds (i.e. "|")
+                clean_smiles = smiles.replace("|", "")
+                
+                # Parse SMILES
+                mol = Chem.MolFromSmiles(clean_smiles)
+                
+                if mol is None:
+                    scaffolds[ligand_id] = smiles
+                    continue
+                
+                # Generate scaffold
                 scaffold = MurckoScaffold.GetScaffoldForMol(mol)
                 scaffold_smiles = Chem.MolToSmiles(scaffold)
+                
+
                 scaffolds[ligand_id] = scaffold_smiles if scaffold_smiles else smiles
+                
             except Exception:
-                continue
+                scaffolds[ligand_id] = smiles
+                
         return scaffolds
 
     def create(self):
         print("Starting advanced data splitting...")
         protein_seqs, nucleic_seqs, ligand_smiles = {}, {}, {}
+        
         for entry in self.manifest.values():
+            # Get dictionaries that may not exist
             protein_seqs.update(entry.get("protein_sequences", {}))
             nucleic_seqs.update(entry.get("nucleic_sequences", {}))
             for lig_key, lig_data in entry.get("ligands", {}).items():
                 ligand_smiles[lig_key] = lig_data["smiles"]
 
+        # Compute clusters
         with tempfile.TemporaryDirectory() as tmpdir:
             work_dir = Path(tmpdir)
             print("\nClustering Proteins...")
@@ -107,17 +123,20 @@ class PDBDataSplitter:
         # Build map from each PDB ID to all associated cluster IDs
         pdb_to_clusters: Dict[str, Set[str]] = {pdb_id: set() for pdb_id in self.manifest}
         for pdb_id, entry in self.manifest.items():
-            for chain_id in entry["protein_sequences"]:
+            
+            for chain_id in entry.get("protein_sequences", {}):
                 if chain_id in protein_map:
                     pdb_to_clusters[pdb_id].add(f"p_{protein_map[chain_id]}")
-            for chain_id in entry["nucleic_sequences"]:
+                    
+            for chain_id in entry.get("nucleic_sequences", {}):
                 if chain_id in nucleic_map:
                     pdb_to_clusters[pdb_id].add(f"n_{nucleic_map[chain_id]}")
-            for ligand_id in entry["ligand_smiles"]:
+                    
+            for ligand_id in entry.get("ligands", {}):
                 if ligand_id in ligand_map:
                     pdb_to_clusters[pdb_id].add(f"l_{ligand_map[ligand_id]}")
         
-        # Get unique cluster IDs from entire dataset
+        # Get all unique cluster IDs from entire dataset
         all_clusters = sorted(list(set.union(*pdb_to_clusters.values())))
         rng = random.Random(self.splitting_config['seed'])
         rng.shuffle(all_clusters)
@@ -132,7 +151,7 @@ class PDBDataSplitter:
         val_clusters = set(all_clusters[train_end:val_end])
         test_clusters = set(all_clusters[val_end:])
         
-        # Assign PDBs to splits
+        # Assign PDBs to splits with hierarchy
         train_pdbs, val_pdbs, test_pdbs = set(), set(), set()
         for pdb_id, clusters in pdb_to_clusters.items():
             if not clusters.isdisjoint(test_clusters):
@@ -145,8 +164,10 @@ class PDBDataSplitter:
         print("\nFinal Split Sizes:")
         print(f"Train: {len(train_pdbs)}, Val: {len(val_pdbs)}, Test: {len(test_pdbs)}")
         
+        # Save splits
         for name, s in [("train", train_pdbs), ("val", val_pdbs), ("test", test_pdbs)]:
             path = self.split_paths[name]
+            path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w") as f:
                 for pdb_id in sorted(list(s)):
                     f.write(f"{pdb_id}\n")

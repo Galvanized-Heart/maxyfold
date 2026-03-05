@@ -95,6 +95,8 @@ class PDBManifest:
                     "ligands": {}
                 }
 
+                total_residues = 0
+
                 # Process chains to sequence/SMILES
                 for chain_id in asm_chains:
                     ent_id = chain_to_ent.get(chain_id)
@@ -104,7 +106,7 @@ class PDBManifest:
                     data = entity_data[ent_id]
                     ent_type = data['type']
                     
-                    # Water
+                    # Skip water
                     if ent_type == 'water':
                         entry['chains'][chain_id] = 'water'
                         continue
@@ -112,26 +114,35 @@ class PDBManifest:
                     # Polymers (Protein/Nucleic)
                     if ent_type == 'polymer':
                         seq = data['seq']
+
+                        # Filter polymers that are unknown
                         if not seq:
                             entry['chains'][chain_id] = 'polymer_unknown'
                             continue
 
+                        seq_len = len(seq)
+                        total_residues += seq_len
+
+                        # Filter sequences that are <4 residues
+                        if seq_len < 4:
+                            entry['chains'][chain_id] = 'polymer_too_short'
+                            continue
+
+                        # Classify protein/nucleic acid polymers
                         is_protein = any(c in 'DEFHIKLMNPQRSVWY' for c in seq)
                         chain_key = f"{pdb_id_upper}_{chain_id}"
-
                         if is_protein:
                             entry['chains'][chain_id] = 'protein'
-                            if len(seq) > 10:
-                                entry['protein_sequences'][chain_key] = seq
+                            entry['protein_sequences'][chain_key] = seq
                         else:
                             entry['chains'][chain_id] = 'nucleic_acid'
-                            if len(seq) >= 2:
-                                entry['nucleic_sequences'][chain_key] = seq
+                            entry['nucleic_sequences'][chain_key] = seq
                     
                     # Ligands
                     elif ent_type == 'non-polymer':
                         comp_id = data['ligand_id']
                         
+                        # Filter solvent chains
                         if comp_id in SOLVENT_RESIDUES: 
                             entry['chains'][chain_id] = 'solvent'
                             continue
@@ -141,11 +152,16 @@ class PDBManifest:
                         if comp_id and comp_id in self.smiles_map:
                             smiles = self.smiles_map[comp_id]
                             if smiles != "O":
-                                chain_key = f"{pdb_id_upper}_{chain_id}_{comp_id}"
+                                chain_key = f"{pdb_id_upper}_{chain_id}"
                                 entry['ligands'][chain_key] = {
                                     "ccd_id": comp_id,
                                     "smiles": smiles
                                 }
+                                total_residues += 1 
+
+                # Filter large complexes
+                if total_residues > 5000:
+                    continue
                 
                 # Cleanup empty dicts
                 entry = {k: v for k, v in entry.items() if v}
