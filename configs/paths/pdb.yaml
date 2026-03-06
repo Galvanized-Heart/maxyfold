@@ -14,6 +14,7 @@ pdb_processed_dir: ${paths.pdb_data_dir}/processed
 ccd_atoms_map_path: ${paths.pdb_processed_dir}/ccd_atoms.json
 ccd_smiles_map_path: ${paths.pdb_processed_dir}/ccd_smiles.json
 manifest_path: ${paths.pdb_processed_dir}/manifest.json
+invalid_ids_path: ${paths.pdb_processed_dir}/invalid_ids.txt
 dataset_path: ${paths.pdb_processed_dir}/pdb_dataset.lmdb
 
 # Split file paths

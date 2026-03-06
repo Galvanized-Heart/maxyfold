@@ -11,11 +11,13 @@ except ImportError:
     raise ImportError("Gemmi is required for this script.")
 
 class PDBManifest:
-    def __init__(self, raw_assemblies_dir: Path, ccd_smiles_path: Path, limit: int = 0):
+    def __init__(self, raw_assemblies_dir: Path, ccd_smiles_path: Path, invalid_ids: set, limit: int = 0):
         self.raw_assemblies_dir = raw_assemblies_dir
+        self.invalid_ids = invalid_ids
+        self.limit = limit
+
         with open(ccd_smiles_path, 'r') as f:
             self.smiles_map = json.load(f)
-        self.limit = limit
 
     def _get_assembly_chains(self, block: gemmi.cif.Block) -> set:
         """Returns set of label_asym_ids in Assembly 1."""
@@ -74,6 +76,9 @@ class PDBManifest:
 
         for pdb_id, cif_string in pbar:
             pdb_id_upper = pdb_id.upper()
+            
+            if pdb_id_upper in self.invalid_ids:
+                continue
             
             try:
                 doc = gemmi.cif.read_string(cif_string)

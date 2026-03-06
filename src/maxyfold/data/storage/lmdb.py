@@ -87,7 +87,9 @@ class LMDBBackend(DataBackend):
             self._connect()
 
         data_bytes = self.txn.get(key.encode('ascii'))
-        if data_bytes is None: return None
+        
+        if data_bytes is None: 
+            raise KeyError(f"PDB ID '{key}' not found in LMDB at {self.path}.")
 
         data = load(data_bytes)
         return {

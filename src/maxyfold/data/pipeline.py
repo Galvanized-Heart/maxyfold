@@ -118,30 +118,42 @@ class DataPipelineManager:
         processor = PDBProcessor(ligand_map_path=str(self.paths.ccd_atoms_map_path))
         cif_stream = TarballReader(tar_paths=tar_files, file_limit=file_limit)
         
-        total_complexes, total_errors = 0, 0
+        total_complexes = 0
+        invalid_ids = []
         
         print(f"Writing data using {backend.__class__.__name__}...")
         with backend.get_writer() as writer:
             for pdb_id, cif_string in tqdm(cif_stream, desc="Processing PDBs"):
                 result = processor.parse_cif_string(cif_string, pdb_id)
                 if result:
-                    writer.write(pdb_id, result)
+                    writer.write(pdb_id.upper(), result)
                     total_complexes += 1
-                    if total_complexes % 1000 == 0:
-                        writer.commit()
                 else:
-                    total_errors += 1
-        return total_complexes, total_errors
+                    invalid_ids.append(pdb_id.upper())
+        
+        invalid_ids_path = Path(self.paths.invalid_ids_path)
+        with open(invalid_ids_path, 'w') as f:
+            for pdb_id in sorted(invalid_ids):
+                f.write(f"{pdb_id}\n")
+        print(f"Saved {len(invalid_ids)} invalid/skipped PDB IDs to {invalid_ids_path}")
+                
+        return total_complexes, len(invalid_ids)
 
     def create_manifest(self, limit: int = 0):
         """Scans the dataset and creates a JSON manifest of its contents."""
         from maxyfold.data.splits.pdb_manifest import PDBManifest
         
-        backend = self.get_backend().__class__.__name__
+        invalid_ids_path = Path(self.paths.invalid_ids_path)
+        invalid_ids = set()
+        if invalid_ids_path.exists():
+            with open(invalid_ids_path, 'r') as f:
+                invalid_ids = {line.strip().upper() for line in f}
+            print(f"Loaded {len(invalid_ids)} IDs to exclude from the manifest.")
 
         creator = PDBManifest(
             raw_assemblies_dir=self.assemblies_dir,
             ccd_smiles_path=self.paths.ccd_smiles_map_path,
+            invalid_ids=invalid_ids,
             limit=limit
         )
         

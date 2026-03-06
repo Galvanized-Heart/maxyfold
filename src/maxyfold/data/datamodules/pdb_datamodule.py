@@ -4,15 +4,17 @@ from pathlib import Path
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
-from maxyfold.data import DataBackendBackend, BaseCropper, PDBDataset
+from maxyfold.data import DataBackend, BaseCropper, PDBDataset
 
 
 
 class PDBDataModule(LightningDataModule):
     def __init__(
         self,
-        bakcend: DataBackend,
-        processed_dir: str,
+        backend: DataBackend,
+        train_set_path: str,
+        val_set_path: str,
+        test_set_path: str,
         batch_size: int,
         num_workers: int,
         pin_memory: bool,
