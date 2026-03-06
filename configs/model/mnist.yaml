@@ -1,4 +1,4 @@
-_target_: maxyfold.models.mnist_module.MNISTLitModule
+_target_: maxyfold.models.litmodules.mnist_module.MNISTLitModule
 
 optimizer:
   _target_: torch.optim.Adam

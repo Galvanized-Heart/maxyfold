@@ -14,7 +14,6 @@ class PDBDataset(Dataset):
         """
         self.backend = backend
         self.cropper = cropper
-        print(cropper)
 
     def __len__(self):
         return len(self.backend)
