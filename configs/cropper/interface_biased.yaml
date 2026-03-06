@@ -1,0 +1,4 @@
+_target_: maxyfold.data.cropping.croppers.InterfaceBiasedCropper
+crop_size: 384
+pad_token_id: 0
+interface_cutoff: 8.0

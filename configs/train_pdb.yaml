@@ -5,6 +5,7 @@
 defaults:
   - _self_
   - data: pdb
+  - cropper: contiguous
   - model: mnist
   - storage: lmdb
   - callbacks: default

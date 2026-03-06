@@ -14,6 +14,7 @@ class PDBDataset(Dataset):
         """
         self.backend = backend
         self.cropper = cropper
+        print(cropper)
 
     def __len__(self):
         return len(self.backend)
@@ -22,10 +23,10 @@ class PDBDataset(Dataset):
         raw_data = self.backend.get_raw_data(idx)
         
         # Apply crop/pad
-        if self.cropper is not None:
-            processed_data = self.cropper(raw_data)
+        if self.cropper is None:
+            raise RuntimeError("Cropper must be initialized to ensure tensor shapes match in collate_fn.")
         else:
-            processed_data = raw_data
+            processed_data = self.cropper(raw_data)
 
         item = {
             "pdb_id": processed_data["pdb_id"],

@@ -32,67 +32,6 @@ class PDBProcessor:
         else:
             print(f"Warning: Ligand atom map not found at {path}. Ligands will be ignored!")
 
-    def parse_cif_string(self, cif_string: str, pdb_id: str):
-        try:
-            doc = gemmi.cif.read_string(cif_string)
-            if not doc: return None
-            block = doc[0]
-            st = gemmi.make_structure_from_block(block)
-            model = st[0]
-        except Exception as e:
-            return None
-
-        # Pass the CIF block to get polymer
-        entity_types, chain_to_entity = self._get_entity_info(block)
-
-        data = {"res_type": [], "coords": [], "mask": [], "atom_elements": [], "chain_ids": []}
-        
-        chain_counter = 0
-        
-        for chain in model:
-            # Get entity label
-            subchains = chain.subchains()
-            label_asym_id = subchains[0].subchain_id() if len(subchains) > 0 else chain.name
-            entity_id = chain_to_entity.get(label_asym_id)
-            
-            if not entity_id: 
-                continue
-                
-            base_type = entity_types.get(entity_id)
-            
-            # Skip water entities
-            if base_type == "water":
-                continue
-
-            residues = list(chain)
-            if not residues: 
-                continue
-
-            # Assign polymer type for appropriate tokenization
-            if base_type == "polymer":
-                polymer_type = self._get_chain_polymer_type(block, entity_id)
-                if polymer_type in ["PROTEIN", "NUCLEIC"]:
-                    self._process_polymer(residues, data, chain_counter)
-                else:
-                    self._process_ligand(residues, data, chain_counter)
-            
-            elif base_type == "non-polymer":
-                self._process_ligand(residues, data, chain_counter)
-            
-            chain_counter += 1
-
-        if len(data["res_type"]) == 0: 
-            return None
-        
-        return {
-            "pdb_id": pdb_id,
-            "res_type": np.array(data["res_type"], dtype=np.int32),
-            "coords": np.array(data["coords"], dtype=np.float32),
-            "mask": np.array(data["mask"], dtype=np.float32),
-            "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
-            "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
-        }
-
     def _get_entity_info(self, block: gemmi.cif.Block):
         """Extracts entity classifications and chain-to-entity mapping from a CIF Block."""
         entity_types = {}
@@ -218,3 +157,64 @@ class PDBProcessor:
                 data["mask"].append(token_mask)
                 data["atom_elements"].append(token_elems)
                 data["chain_ids"].append(chain_id)
+
+    def parse_cif_string(self, cif_string: str, pdb_id: str):
+        try:
+            doc = gemmi.cif.read_string(cif_string)
+            if not doc: return None
+            block = doc[0]
+            st = gemmi.make_structure_from_block(block)
+            model = st[0]
+        except Exception as e:
+            return None
+
+        # Pass the CIF block to get polymer
+        entity_types, chain_to_entity = self._get_entity_info(block)
+
+        data = {"res_type": [], "coords": [], "mask": [], "atom_elements": [], "chain_ids": []}
+        
+        chain_counter = 0
+        
+        for chain in model:
+            # Get entity label
+            subchains = chain.subchains()
+            label_asym_id = subchains[0].subchain_id() if len(subchains) > 0 else chain.name
+            entity_id = chain_to_entity.get(label_asym_id)
+            
+            if not entity_id: 
+                continue
+                
+            base_type = entity_types.get(entity_id)
+            
+            # Skip water entities
+            if base_type == "water":
+                continue
+
+            residues = list(chain)
+            if not residues: 
+                continue
+
+            # Assign polymer type for appropriate tokenization
+            if base_type == "polymer":
+                polymer_type = self._get_chain_polymer_type(block, entity_id)
+                if polymer_type in ["PROTEIN", "NUCLEIC"]:
+                    self._process_polymer(residues, data, chain_counter)
+                else:
+                    self._process_ligand(residues, data, chain_counter)
+            
+            elif base_type == "non-polymer":
+                self._process_ligand(residues, data, chain_counter)
+            
+            chain_counter += 1
+
+        if len(data["res_type"]) == 0: 
+            return None
+        
+        return {
+            "pdb_id": pdb_id,
+            "res_type": np.array(data["res_type"], dtype=np.int32),
+            "coords": np.array(data["coords"], dtype=np.float32),
+            "mask": np.array(data["mask"], dtype=np.float32),
+            "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
+            "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
+        }
