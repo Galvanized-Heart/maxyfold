@@ -17,6 +17,7 @@ class PDBLitModule(LightningModule):
         self.model = model
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
+        self.test_loss = MeanMetric()
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Perform a forward pass through the network."""
@@ -49,6 +50,11 @@ class PDBLitModule(LightningModule):
         loss = self.model_step(batch)
         self.val_loss(loss)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
+
+    def test_step(self, batch: Dict[str, Any], batch_idx: int) -> None:
+        loss = self.model_step(batch)
+        self.test_loss(loss)
+        self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         optimizer = self.hparams.optimizer(params=self.parameters())
