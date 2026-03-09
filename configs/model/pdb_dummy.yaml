@@ -9,5 +9,5 @@ optimizer:
 scheduler: null
 
 model:
-  _target_: maxyfold.models.components.dummy.DummyNet
+  _target_: maxyfold.models.architectures.dummy.DummyNet
   crop_size: ${data.cropper.crop_size}
