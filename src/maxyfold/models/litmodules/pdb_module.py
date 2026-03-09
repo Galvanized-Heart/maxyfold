@@ -20,7 +20,7 @@ class PDBLitModule(LightningModule):
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Perform a forward pass through the network."""
-        return self.net(batch)
+        return self.model(batch)
 
     def model_step(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """A single pass + loss calculation."""

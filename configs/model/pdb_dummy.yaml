@@ -1,0 +1,13 @@
+_target_: maxyfold.models.litmodules.pdb_module.PDBLitModule
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.01 # Use a high LR for overfitting
+  weight_decay: 0.0
+
+scheduler: null
+
+model:
+  _target_: maxyfold.models.components.dummy.DummyNet
+  crop_size: ${data.cropper.crop_size}
