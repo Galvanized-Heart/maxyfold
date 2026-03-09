@@ -1,0 +1,21 @@
+defaults:
+  - /loss: mse
+  - _self_
+
+_target_: maxyfold.models.litmodules.pdb_module.PDBLitModule
+
+loss_fn: ${loss}
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0
+
+scheduler: null
+
+model:
+  _target_: maxyfold.models.architectures.maxyfold_net.MaxyFoldNet
+  single_dim: 128
+  pair_dim: 64
+  num_blocks: 4

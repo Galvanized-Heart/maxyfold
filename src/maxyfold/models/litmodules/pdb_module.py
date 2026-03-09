@@ -9,12 +9,14 @@ class PDBLitModule(LightningModule):
     def __init__(
         self,
         model: torch.nn.Module,
+        loss_fn: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
     ) -> None:
         super().__init__()
-        self.save_hyperparameters(logger=False, ignore=["model"])
+        self.save_hyperparameters(logger=False, ignore=["model", "loss_fn"])
         self.model = model
+        self.loss_fn = loss_fn
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.test_loss = MeanMetric()
@@ -25,18 +27,16 @@ class PDBLitModule(LightningModule):
 
     def model_step(self, batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         """A single pass + loss calculation."""
-        # Ground truth coordinates
         gt_coords = batch["coords"] # [B, L, 27, 3]
         mask = batch["mask"]        # [B, L, 27]
 
-        # Predicted coordinates (Output of your future network)
-        # For now, we assume the network returns predicted coords in the same shape
         pred_coords = self.forward(batch)
 
-        # Simple MSE Loss, only calculated for atoms that exist (mask == 1)
-        # In the future, we will replace this with structural losses like FAPE
-        diff = (gt_coords - pred_coords) ** 2
-        loss = (diff.sum(dim=-1) * mask).sum() / (mask.sum() + 1e-6)
+        loss = self.loss_fn(
+            pred_coords=pred_coords,
+            true_coords=gt_coords,
+            mask=mask
+        )
         
         return loss
 
