@@ -3,8 +3,7 @@ from torch import nn
 
 class MSELoss(nn.Module):
     """
-    A placeholder for the Frame Aligned Point Error loss.
-    Currently implements a simple masked MSE for testing the pipeline.
+    A simple masked mean squared error loss.
     """
     def __init__(self, weight: float = 1.0):
         super().__init__()
