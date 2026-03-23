@@ -37,6 +37,8 @@ def main(db_name, num_entries, verbose_atoms):
             pdb_id = key.decode('ascii')
             
             data = load(value) 
+
+            print(f"Shape of mask: {data['mask'].shape}\n")
             
             print(f"Chain IDs for {pdb_id}: {data['chain_ids'].shape}\n{data['chain_ids']}\n\n")
 
