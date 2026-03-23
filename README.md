@@ -11,8 +11,18 @@
 [![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539)
 [![Conference](http://img.shields.io/badge/AnyConference-year-4b44ce.svg)](https://papers.nips.cc/paper/2020)
 -->
-
 </div>
+
+## Table of Contents
+- [Description](#description)
+- [Installation](#installation)
+- [Data Pipeline](#data-pipeline)
+  - [1. Download filtered PDB data](#1-download-filtered-pdb-data)
+  - [2. Process to clean LMDB backend](#2-process-to-clean-lmdb-backend)
+  - [3. Create manifest](#3-create-manifest)
+  - [4. Generate train/val/test splits](#4-generate-trainvaltest-splits)
+- [Training & Inference](#training--inference)
+- [Project Status & Roadmap](#project-status--roadmap)
 
 ## Description
 MaxyFold is an open source PyTorch Lightning reimplementation of **all-atom diffusion models** for protein structure prediction (inspired by AlphaFold3, Boltz-1, Chai-1 architectures) from scratch.
@@ -67,7 +77,7 @@ mv mmseqs/bin/mmseqs ~/.local/bin/
 rm -rf mmseqs mmseqs-linux-avx2.tar.gz
 ```
 
-## How to run data pipeline
+## Data Pipeline
 ### 1. Download filtered PDB data
 ```bash
 maxyfold download --ids --assemblies --ccd --batch-size 10000 --file-limit 5000
@@ -91,7 +101,7 @@ maxyfold split --seq-id 0.3 --coverage 0.8 --cluster-mode 1
 
 Want to use a different backend? Subclass DataBackend (see src/maxyfold/data/storage/lmdb.py for example) and plug it into your config.
 
-## How to run training/inference pipeline
+## Training/Inference
 
 Train model with default configurations.
 
