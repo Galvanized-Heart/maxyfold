@@ -104,10 +104,14 @@ class DataPipelineManager:
             
             print(f"Batch {i+1} complete. Archived and removed {removed_count} uncompressed files.")
 
-    def process(self, file_limit=0):
+    def process(self, file_limit=0, use_biotite=False):
         from tqdm import tqdm
-        from maxyfold.data.processing.pdb_processor import PDBProcessor
         from maxyfold.data.components.tarball_reader import TarballReader
+
+        if use_biotite:
+            from maxyfold.data.processing.pdb_processor import BiotitePDBProcessor as PDBProcessor
+        else:
+            from maxyfold.data.processing.pdb_processor import GemmiPDBProcessor as PDBProcessor
 
         backend = self.get_backend()
         
@@ -139,10 +143,14 @@ class DataPipelineManager:
                 
         return total_complexes, len(invalid_ids)
 
-    def create_manifest(self, limit: int = 0):
+    def create_manifest(self, limit: int = 0, use_biotite=False):
         """Scans the dataset and creates a JSON manifest of its contents."""
-        from maxyfold.data.splits.pdb_manifest import PDBManifest
         
+        if use_biotite:
+            from maxyfold.data.splits.pdb_manifest import BiotitePDBManifest as PDBManifest
+        else:
+            from maxyfold.data.splits.pdb_manifest import GemmiPDBManifest as PDBManifest
+
         invalid_ids_path = Path(self.paths.invalid_ids_path)
         invalid_ids = set()
         if invalid_ids_path.exists():

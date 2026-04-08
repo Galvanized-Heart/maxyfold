@@ -5,7 +5,7 @@ from .components.tarball_writer import TarballWriter
 
 from .download.pdb_downloader import PDBDownloader
 
-from .processing.pdb_processor import PDBProcessor
+#from .processing.pdb_processor import PDBProcessor
 
 from .splits.pdb_splitter import PDBDataSplitter
 

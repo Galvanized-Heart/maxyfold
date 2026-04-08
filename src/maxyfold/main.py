@@ -86,7 +86,8 @@ def download(ids, assemblies, ccd, batch_size, file_limit):
 
 @cli.command()
 @click.option("--file-limit", default=0, help="Limit exact number of PDB files to process.")
-def process(file_limit):
+@click.option("--biotite", "-b", is_flag=True, help="Use biotite to process instead of gemmi.")
+def process(file_limit, biotite):
     """Processes raw tar archives into clean LMDB dataset."""
     click.echo("Processing raw PDB files...")
     from maxyfold.data.pipeline import DataPipelineManager
@@ -94,7 +95,7 @@ def process(file_limit):
     manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
 
     try:
-        total_complexes, total_errors = manager.process(file_limit=file_limit)
+        total_complexes, total_errors = manager.process(file_limit=file_limit, use_biotite=biotite)
         click.echo(click.style(f"\nProcessing Complete!", fg="green", bold=True))
         click.echo(f"Total Complexes Saved: {total_complexes}")
         click.echo(f"Skipped/Errors:        {total_errors}")
@@ -105,14 +106,15 @@ def process(file_limit):
 
 @cli.command()
 @click.option("--file-limit", default=0, help="Limit number of PDBs to include in the manifest (for testing).")
-def manifest(file_limit):
+@click.option("--biotite", "-b", is_flag=True, help="Use biotite to process instead of gemmi.")
+def manifest(file_limit, biotite):
     """Scans the dataset to create a manifest of its contents (sequences, ligands)."""
     click.echo("Creating dataset manifest...")
     from maxyfold.data.pipeline import DataPipelineManager
     
     manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
     try:
-        manager.create_manifest(limit=file_limit)
+        manager.create_manifest(limit=file_limit, use_biotite=biotite)
         click.echo(click.style("\nManifest created successfully!", fg="green", bold=True))
     except Exception as e:
         click.echo(click.style(f"\nManifest creation failed: {str(e)}", fg="red", bold=True))

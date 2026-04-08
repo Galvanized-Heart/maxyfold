@@ -1,8 +1,12 @@
 import numpy as np
 import json
 from pathlib import Path
+import io
+
 try:
     import gemmi
+    import biotite.structure as struc
+    import biotite.structure.io.pdbx as pdbx_io
 except ImportError:
     pass
 
@@ -11,7 +15,7 @@ from maxyfold.data.constants import (
     UNK_IDX, LIGAND_IDX, get_element_id
 )
 
-class PDBProcessor:
+class GemmiPDBProcessor:
     def __init__(self, ligand_map_path: Path):
         self.res_lookups = {}
         for res, atoms in ATOM_MAPS.items():
@@ -210,6 +214,143 @@ class PDBProcessor:
         if len(data["res_type"]) == 0: 
             return None
         
+        return {
+            "pdb_id": pdb_id,
+            "res_type": np.array(data["res_type"], dtype=np.int32),
+            "coords": np.array(data["coords"], dtype=np.float32),
+            "mask": np.array(data["mask"], dtype=np.float32),
+            "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
+            "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
+        }
+
+class BiotitePDBProcessor:
+    def __init__(self, ligand_map_path: Path):
+        # Same lookups as before
+        self.res_lookups = {}
+        for res, atoms in ATOM_MAPS.items():
+            self.res_lookups[res] = {name: i for i, name in enumerate(atoms)}
+        self.protein_res = {'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE',
+                           'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL'}
+        self.nucleic_res = {'DA', 'DC', 'DG', 'DT', 'A', 'C', 'G', 'U'}
+        self.ligand_ref_atoms = {}
+        path = Path(ligand_map_path)
+        if path.exists():
+            with open(path, 'r') as f:
+                self.ligand_ref_atoms = json.load(f)
+        else:
+            print(f"Warning: Ligand atom map not found at {path}. Ligands will be ignored!")
+
+    def _process_polymer_biotite(self, chain_atoms: struc.AtomArray, data, chain_id):
+        """Native Biotite way — uses get_residues correctly"""
+        res_ids, res_names = struc.get_residues(chain_atoms)
+
+        for i in range(len(res_names)):
+            rname = res_names[i].strip().upper()
+            if rname in ['HOH', 'DOD', 'WAT']:
+                continue
+
+            token_id = res_to_idx.get(rname, UNK_IDX)
+            atom_map = self.res_lookups.get(rname, self.res_lookups.get('UNK', {}))
+
+            token_coords = np.zeros((MAX_ATOM_COUNT, 3), dtype=np.float32)
+            token_mask = np.zeros(MAX_ATOM_COUNT, dtype=np.float32)
+            token_elems = np.zeros(MAX_ATOM_COUNT, dtype=np.int32)
+
+            # residue-specific mask (fast & vectorized)
+            res_mask = (chain_atoms.res_id == res_ids[i]) & (chain_atoms.res_name == res_names[i])
+            res_atoms = chain_atoms[res_mask]
+
+            for atom in res_atoms:
+                aname = atom.atom_name
+                if "*" in aname:
+                    aname = aname.replace("*", "'")
+                if aname == "O1P":
+                    aname = "OP1"
+                if aname == "O2P":
+                    aname = "OP2"
+
+                idx = atom_map.get(aname, -1)
+                if idx != -1:
+                    token_coords[idx] = atom.coord
+                    token_mask[idx] = 1.0
+                    token_elems[idx] = get_element_id(atom.element)
+
+            data["res_type"].append(token_id)
+            data["coords"].append(token_coords)
+            data["mask"].append(token_mask)
+            data["atom_elements"].append(token_elems)
+            data["chain_ids"].append(chain_id)
+
+    def _process_ligand_biotite(self, chain_atoms: struc.AtomArray, data, chain_id):
+        """Exact 1:1 port of your original Gemmi ligand logic"""
+        for res_name in np.unique(chain_atoms.res_name):
+            rname = res_name.strip().upper()
+            if rname in ['HOH', 'DOD', 'WAT', 'SOL']:
+                continue
+
+            reference_atoms = self.ligand_ref_atoms.get(rname)
+            if not reference_atoms:
+                continue
+
+            res_mask = chain_atoms.res_name == res_name
+            res_atoms = chain_atoms[res_mask]
+            pdb_atoms = {a.atom_name.strip(): a for a in res_atoms}
+
+            for ref_atom_name, ref_element in reference_atoms:
+                token_coords = np.zeros((MAX_ATOM_COUNT, 3), dtype=np.float32)
+                token_mask = np.zeros(MAX_ATOM_COUNT, dtype=np.float32)
+                token_elems = np.zeros(MAX_ATOM_COUNT, dtype=np.int32)
+
+                token_elems[0] = get_element_id(ref_element)
+
+                if ref_atom_name in pdb_atoms:
+                    atom = pdb_atoms[ref_atom_name]
+                    token_coords[0] = atom.coord
+                    token_mask[0] = 1.0
+                else:
+                    token_mask[0] = 0.0
+
+                data["res_type"].append(LIGAND_IDX)
+                data["coords"].append(token_coords)
+                data["mask"].append(token_mask)
+                data["atom_elements"].append(token_elems)
+                data["chain_ids"].append(chain_id)
+
+    def parse_cif_string(self, cif_string: str, pdb_id: str):
+        try:
+            fileobj = io.StringIO(cif_string)
+            cif_file = pdbx_io.CIFFile.read(fileobj)
+            structure = pdbx_io.get_structure(cif_file, model=1)
+        except Exception as e:
+            print(f"Biotite parse failed for {pdb_id}: {e}")
+            return None
+
+        data = {"res_type": [], "coords": [], "mask": [], "atom_elements": [], "chain_ids": []}
+        chain_counter = 0
+
+        chain_ids = structure.chain_id
+        unique_chains = np.unique(chain_ids)
+
+        for chain_id in unique_chains:
+            mask = chain_ids == chain_id
+            chain_atoms = structure[mask]
+            if len(chain_atoms) == 0:
+                continue
+
+            res_names = np.unique(chain_atoms.res_name)
+            is_protein = any(r in self.protein_res for r in res_names)
+            is_nucleic = any(r in self.nucleic_res for r in res_names)
+
+            if is_protein or is_nucleic:
+                self._process_polymer_biotite(chain_atoms, data, chain_counter)
+            else:
+                self._process_ligand_biotite(chain_atoms, data, chain_counter)
+
+            chain_counter += 1
+
+        if len(data["res_type"]) == 0:
+            return None
+
         return {
             "pdb_id": pdb_id,
             "res_type": np.array(data["res_type"], dtype=np.int32),
