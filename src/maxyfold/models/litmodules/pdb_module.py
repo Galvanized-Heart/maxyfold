@@ -3,6 +3,12 @@ import torch
 from lightning import LightningModule
 from torchmetrics import MeanMetric
 
+#############################################################################
+# TODO: Refactor this to be able to run inference from just the .ckpt file! #
+#############################################################################
+# - Pass dicts wherever possible and instantiate within LitModule.
+# - Consider if using torch.jit.script() is a good option for this.
+
 class PDBLitModule(LightningModule):
     """LightningModule for Protein Structure tasks."""
 
