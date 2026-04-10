@@ -8,7 +8,7 @@ import shutil
 # Load root path
 root = rootutils.find_root(indicator=".project-root")
 # This root variable must exist for config/paths/default.yaml to work correctly.
-# Run `export PROJECT_ROOT=$(pwd)` to set to current dir.
+# To set to current dir, run `export PROJECT_ROOT=$(pwd)`.
 # Verify PROJECT_ROOT was updated by running `echo $PROJECT_ROOT`.
 
 # Load config
@@ -113,6 +113,7 @@ def manifest(file_limit, biotite):
     from maxyfold.data.pipeline import DataPipelineManager
     
     manager = DataPipelineManager(paths_cfg=cfg.paths, storage_cfg=cfg.storage)
+    
     try:
         manager.create_manifest(limit=file_limit, use_biotite=biotite)
         click.echo(click.style("\nManifest created successfully!", fg="green", bold=True))
