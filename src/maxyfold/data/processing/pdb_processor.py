@@ -6,7 +6,7 @@ import io
 try:
     import gemmi
     import biotite.structure as struc
-    import biotite.structure.io.pdbx as pdbx_io
+    import biotite.structure.io.pdbx as pdbx
 except ImportError:
     pass
 
@@ -214,7 +214,7 @@ class GemmiPDBProcessor:
         if len(data["res_type"]) == 0: 
             return None
         
-        return {
+        np_data = {
             "pdb_id": pdb_id,
             "res_type": np.array(data["res_type"], dtype=np.int32),
             "coords": np.array(data["coords"], dtype=np.float32),
@@ -222,6 +222,8 @@ class GemmiPDBProcessor:
             "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
             "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
         }
+
+        return np_data
 
 class BiotitePDBProcessor:
     def __init__(self, ligand_map_path: Path):
@@ -240,7 +242,7 @@ class BiotitePDBProcessor:
         else:
             print(f"Warning: Ligand atom map not found at {path}. Ligands will be ignored!")
 
-    def _process_polymer_biotite(self, chain_atoms: struc.AtomArray, data, chain_id):
+    def _process_polymer(self, chain_atoms: struc.AtomArray, data, chain_id):
         """Native Biotite way — uses get_residues correctly"""
         res_ids, res_names = struc.get_residues(chain_atoms)
 
@@ -281,7 +283,7 @@ class BiotitePDBProcessor:
             data["atom_elements"].append(token_elems)
             data["chain_ids"].append(chain_id)
 
-    def _process_ligand_biotite(self, chain_atoms: struc.AtomArray, data, chain_id):
+    def _process_ligand(self, chain_atoms: struc.AtomArray, data, chain_id):
         """Exact 1:1 port of your original Gemmi ligand logic"""
         for res_name in np.unique(chain_atoms.res_name):
             rname = res_name.strip().upper()
@@ -319,8 +321,8 @@ class BiotitePDBProcessor:
     def parse_cif_string(self, cif_string: str, pdb_id: str):
         try:
             fileobj = io.StringIO(cif_string)
-            cif_file = pdbx_io.CIFFile.read(fileobj)
-            structure = pdbx_io.get_structure(cif_file, model=1)
+            cif_file = pdbx.CIFFile.read(fileobj)
+            structure = pdbx.get_structure(cif_file, model=1, use_author_fields=False)
         except Exception as e:
             print(f"Biotite parse failed for {pdb_id}: {e}")
             return None
@@ -342,16 +344,16 @@ class BiotitePDBProcessor:
             is_nucleic = any(r in self.nucleic_res for r in res_names)
 
             if is_protein or is_nucleic:
-                self._process_polymer_biotite(chain_atoms, data, chain_counter)
+                self._process_polymer(chain_atoms, data, chain_counter)
             else:
-                self._process_ligand_biotite(chain_atoms, data, chain_counter)
+                self._process_ligand(chain_atoms, data, chain_counter)
 
             chain_counter += 1
 
         if len(data["res_type"]) == 0:
             return None
 
-        return {
+        np_data = {
             "pdb_id": pdb_id,
             "res_type": np.array(data["res_type"], dtype=np.int32),
             "coords": np.array(data["coords"], dtype=np.float32),
@@ -359,3 +361,5 @@ class BiotitePDBProcessor:
             "atom_elements": np.array(data["atom_elements"], dtype=np.int32),
             "chain_ids": np.array(data["chain_ids"], dtype=np.int32)
         }
+
+        return np_data
