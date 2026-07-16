@@ -82,6 +82,9 @@ class PDBLitModule(LightningModule):
             "mask": mask,
         }
     
+    def _has_external_logger(self) -> bool:
+        return bool(self.loggers)
+
     def _log_loss(
         self,
         stage: str,
@@ -96,7 +99,7 @@ class PDBLitModule(LightningModule):
             on_step=False,
             on_epoch=True,
             prog_bar=prog_bar,
-            logger=True,
+            logger=self._has_external_logger(),
             sync_dist=self.hparams.sync_dist,
         )
 
@@ -129,7 +132,7 @@ class PDBLitModule(LightningModule):
             on_step=False,
             on_epoch=True,
             prog_bar=False,
-            logger=True,
+            logger=self._has_external_logger(),
             sync_dist=self.hparams.sync_dist,
         )
 

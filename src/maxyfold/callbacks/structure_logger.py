@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 import torch
 from lightning import Callback, LightningModule, Trainer
+from lightning.pytorch.loggers import WandbLogger
 
 from maxyfold.data.structure import LocalStructureWriter, StructureRecord
 from maxyfold.models.metrics.structure_functional import (
@@ -36,6 +38,7 @@ class StructureLoggerCallback(Callback):
     def __init__(
         self,
         run_dir: str,
+        project_root: str | Path,
         every_n_epochs: int = 5,
         max_samples: int = 8,
         save_epoch_zero: bool = True,
@@ -51,6 +54,8 @@ class StructureLoggerCallback(Callback):
             raise ValueError("max_samples must be non-negative")
 
         self.writer = LocalStructureWriter(run_dir=run_dir)
+        self.project_root = Path(project_root).resolve()
+        
         self.every_n_epochs = every_n_epochs
         self.max_samples = max_samples
         self.save_epoch_zero = save_epoch_zero
@@ -58,6 +63,22 @@ class StructureLoggerCallback(Callback):
         self.max_pairwise_tokens = max_pairwise_tokens
 
         self._saved_this_epoch = 0
+        self._wandb_manifest_logged = False
+
+    def _log_manifest_path_to_wandb(self, trainer: Trainer) -> None:
+        """Expose the local structure manifest as a W&B run output."""
+        if self._wandb_manifest_logged:
+            return
+
+        # Relative path
+        manifest_path = self.writer.manifest_path.resolve()
+        manifest_path = manifest_path.relative_to(self.project_root).as_posix()
+
+        for logger in trainer.loggers:
+            if isinstance(logger, WandbLogger):
+                logger.experiment.summary["local_structure_manifest"] = manifest_path
+                self._wandb_manifest_logged = True
+                return
 
     def on_validation_epoch_start(
         self,
@@ -260,5 +281,7 @@ class StructureLoggerCallback(Callback):
                 batch_idx=batch_idx,
                 sample_idx=sample_idx,
             )
+
+            self._log_manifest_path_to_wandb(trainer)
 
             self._saved_this_epoch += 1

@@ -2,6 +2,7 @@ structure_logger:
   _target_: maxyfold.callbacks.structure_logger.StructureLoggerCallback
 
   run_dir: ${paths.output_dir}
+  project_root: ${paths.root_dir}
 
   every_n_epochs: 5
   max_samples: 8

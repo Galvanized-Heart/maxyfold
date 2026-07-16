@@ -8,8 +8,8 @@ defaults:
   - cropper: contiguous
   - model: pdb_dummy
   - storage: lmdb
-  - callbacks: default
-  - logger: null # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - callbacks: pdb_callbacks
+  - logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
   - trainer: default
   - paths: pdb
   - extras: default
