@@ -1,0 +1,11 @@
+structure_logger:
+  _target_: maxyfold.callbacks.structure_logger.StructureLoggerCallback
+
+  run_dir: ${paths.output_dir}
+
+  every_n_epochs: 5
+  max_samples: 8
+  save_epoch_zero: true
+  save_final_epoch: true
+
+  max_pairwise_tokens: 512

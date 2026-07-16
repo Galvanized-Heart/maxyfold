@@ -1,5 +1,30 @@
 import numpy as np
 
+
+# Helper functions
+def get_residue_name(index: int) -> str:
+    """Decode a residue token ID."""
+    if 0 <= int(index) < len(restypes):
+        return restypes[int(index)]
+    return "UNK"
+
+
+def get_element_symbol(index: int) -> str:
+    """Decode an element token ID."""
+    if 0 <= int(index) < len(elements):
+        return elements[int(index)]
+    return "X"
+
+
+def get_atom_name(residue_name: str, atom_index: int) -> str | None:
+    """Decode an atom slot for a standard polymer residue."""
+    atom_names = ATOM_MAPS.get(residue_name, ATOM_MAPS["UNK"])
+
+    if 0 <= int(atom_index) < len(atom_names):
+        return atom_names[int(atom_index)]
+
+    return None
+
 # ----------------------------------------------------------------------
 #  TENSOR DIMENSIONS
 # ----------------------------------------------------------------------

@@ -8,6 +8,14 @@ optimizer:
 
 scheduler: null
 
+loss_fn:
+  _target_: maxyfold.models.losses.mse_loss.MSELoss
+  weight: 1.0
+
 model:
   _target_: maxyfold.models.architectures.dummy.DummyNet
   crop_size: ${data.cropper.crop_size}
+
+sync_dist: false
+log_structure_metrics: true
+max_pairwise_tokens: ${data.cropper.crop_size}
